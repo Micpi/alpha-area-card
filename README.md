@@ -5,7 +5,7 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge)](https://hacs.xyz)
 [![HA Version](https://img.shields.io/badge/Home%20Assistant-2024.1%2B-blue?style=for-the-badge&logo=home-assistant)](https://www.home-assistant.io)
 [![License](https://img.shields.io/badge/License-MIT-green.svg?style=for-the-badge)](LICENSE)
-[![Version](https://img.shields.io/github/v/release/Micpi/area-card?style=for-the-badge&label=Version)](https://github.com/Micpi/area-card/releases/latest)
+[![Version](https://img.shields.io/github/v/release/Micpi/alpha-area-card?style=for-the-badge&label=Version)](https://github.com/Micpi/alpha-area-card/releases/latest)
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-Support-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=000000)](https://buymeacoffee.com/mickaelpila)
 
 **Carte Lovelace pour afficher une zone Home Assistant avec état synthétique et actions rapides.**  
@@ -22,6 +22,8 @@ Combinez image, capteurs et commandes dans un composant lisible, mobile-first et
 - editeur graphique integre au standard du workspace (`General`, `Actions`, `Styles`, `Defaults`)
 - affichage optimise des capteurs, alertes, toggles et entites secondaires
 - options modernes de l'Area card: `display_type`, `camera_view`, `aspect_ratio`, `color`, `sensor_classes`, `alert_classes`, `features_position`
+- largeur full width par defaut et hauteur precise configurable avec `height`
+- icones d'entites resolues depuis la config, Home Assistant, le registre, puis le domaine/device_class
 - support `features: [{ type: area-controls }]` avec filtres `controls`
 - actions avances: `tap_action`, `hold_action`, `double_tap_action` pour la carte
 - actions par defaut pour les entites en `hold` et `double tap`
@@ -72,6 +74,7 @@ display_type: camera
 camera_entity: camera.salon
 camera_view: auto
 aspect_ratio: 16:9
+height: 220px
 color: primary
 sensor_classes:
   - temperature
@@ -99,6 +102,7 @@ tap_action:
 - camera_entity: camera forcee pour le mode `camera` (sinon premiere camera de la zone)
 - camera_view: conserve la syntaxe HA (`auto` ou `live`); le rendu custom utilise le snapshot `camera_proxy`
 - aspect_ratio: ratio stable (`16:9`, `16x9`, `56.25%`, etc.)
+- height: hauteur fixe optionnelle (`220`, `220px`, `24rem`, `40vh`); si absente, le ratio reste utilise
 - color: token Home Assistant ou couleur hex pour l'accent
 - auto_area_entities: auto-remplissage depuis la zone quand la liste d'entites est vide
 - entities: entites secondaires affichees dans la carte

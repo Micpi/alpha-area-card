@@ -57,6 +57,106 @@ const COLOR_TOKENS = {
   white: "#FFFFFF",
 }
 
+const SENSOR_DEVICE_CLASS_ICONS = {
+  apparent_power: "mdi:flash",
+  battery: "mdi:battery",
+  carbon_dioxide: "mdi:molecule-co2",
+  carbon_monoxide: "mdi:molecule-co",
+  current: "mdi:current-ac",
+  energy: "mdi:lightning-bolt",
+  gas: "mdi:meter-gas",
+  humidity: "mdi:water-percent",
+  illuminance: "mdi:brightness-5",
+  monetary: "mdi:cash",
+  power: "mdi:flash",
+  pressure: "mdi:gauge",
+  signal_strength: "mdi:wifi",
+  temperature: "mdi:thermometer",
+  timestamp: "mdi:clock-outline",
+  voltage: "mdi:sine-wave",
+  volume: "mdi:water",
+  water: "mdi:water",
+}
+
+const BINARY_SENSOR_DEVICE_CLASS_ICONS = {
+  battery: ["mdi:battery-outline", "mdi:battery"],
+  cold: ["mdi:thermometer", "mdi:snowflake"],
+  connectivity: ["mdi:lan-disconnect", "mdi:lan-connect"],
+  door: ["mdi:door-closed", "mdi:door-open"],
+  garage_door: ["mdi:garage", "mdi:garage-open"],
+  gas: ["mdi:check-circle-outline", "mdi:alert-circle"],
+  heat: ["mdi:thermometer", "mdi:fire"],
+  light: ["mdi:brightness-5", "mdi:brightness-7"],
+  lock: ["mdi:lock", "mdi:lock-open-variant"],
+  moisture: ["mdi:water-off", "mdi:water-alert"],
+  motion: ["mdi:motion-sensor-off", "mdi:motion-sensor"],
+  moving: ["mdi:pause-circle-outline", "mdi:motion"],
+  occupancy: ["mdi:home-outline", "mdi:home"],
+  opening: ["mdi:square-outline", "mdi:square-off-outline"],
+  plug: ["mdi:power-plug-off", "mdi:power-plug"],
+  power: ["mdi:power-plug-off", "mdi:power-plug"],
+  presence: ["mdi:home-outline", "mdi:home-account"],
+  problem: ["mdi:check-circle-outline", "mdi:alert-circle"],
+  running: ["mdi:stop-circle-outline", "mdi:play-circle"],
+  safety: ["mdi:shield-check", "mdi:shield-alert"],
+  smoke: ["mdi:check-circle-outline", "mdi:smoke-detector-alert"],
+  sound: ["mdi:volume-off", "mdi:volume-high"],
+  tamper: ["mdi:shield-check", "mdi:shield-alert"],
+  update: ["mdi:package-variant", "mdi:package-up"],
+  vibration: ["mdi:vibrate-off", "mdi:vibrate"],
+  window: ["mdi:window-closed", "mdi:window-open"],
+}
+
+const COVER_DEVICE_CLASS_ICONS = {
+  awning: "mdi:awning",
+  blind: "mdi:blinds",
+  curtain: "mdi:curtains",
+  damper: "mdi:circle-slice-8",
+  door: "mdi:door",
+  garage: "mdi:garage",
+  gate: "mdi:gate",
+  shade: "mdi:roller-shade",
+  shutter: "mdi:window-shutter",
+  window: "mdi:window-closed",
+}
+
+const DOMAIN_ICONS = {
+  alarm_control_panel: "mdi:shield-home",
+  automation: "mdi:robot",
+  button: "mdi:gesture-tap-button",
+  calendar: "mdi:calendar",
+  camera: "mdi:cctv",
+  climate: "mdi:thermostat",
+  conversation: "mdi:chat",
+  device_tracker: "mdi:map-marker",
+  fan: "mdi:fan",
+  group: "mdi:google-circles-communities",
+  humidifier: "mdi:air-humidifier",
+  image: "mdi:image",
+  input_boolean: "mdi:toggle-switch-off",
+  input_button: "mdi:gesture-tap-button",
+  input_datetime: "mdi:calendar-clock",
+  input_number: "mdi:numeric",
+  input_select: "mdi:format-list-bulleted",
+  input_text: "mdi:form-textbox",
+  light: "mdi:lightbulb",
+  lock: "mdi:lock",
+  media_player: "mdi:speaker",
+  number: "mdi:numeric",
+  person: "mdi:account",
+  remote: "mdi:remote",
+  scene: "mdi:palette",
+  script: "mdi:script-text",
+  select: "mdi:format-list-bulleted",
+  sensor: "mdi:gauge",
+  siren: "mdi:bullhorn",
+  switch: "mdi:toggle-switch-off",
+  update: "mdi:package-up",
+  vacuum: "mdi:robot-vacuum",
+  water_heater: "mdi:water-boiler",
+  weather: "mdi:weather-partly-cloudy",
+}
+
 const STYLE_DEFAULTS = {
   button_icon_color_on: "var(--primary-color, #00AEEF)",
   button_icon_color_off: "var(--secondary-text-color, #9CA3AF)",
@@ -76,6 +176,7 @@ const DEFAULT_CONFIG = {
   camera_view: "auto",
   camera_entity: "",
   aspect_ratio: "16:9",
+  height: "",
   color: "",
   auto_area_entities: true,
   hide_unavailable: false,
@@ -188,6 +289,36 @@ const resolveColorToken = (value, fallback = "") => {
   return COLOR_TOKENS[color] || color
 }
 
+const normalizeCssSize = (value, fallback = "") => {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value > 0 ? `${value}px` : fallback
+  }
+
+  const text = safeText(value).trim()
+  if (!text) {
+    return fallback
+  }
+
+  if (/^\d+(?:\.\d+)?$/.test(text)) {
+    return `${text}px`
+  }
+
+  if (/^\d+(?:\.\d+)?(?:px|rem|em|vh|vw|vmin|vmax|%)$/i.test(text)) {
+    return text
+  }
+
+  if (/^(?:calc|min|max|clamp)\([^;{}<>]+\)$/i.test(text) || /^var\([^;{}<>]+\)$/i.test(text)) {
+    return text
+  }
+
+  return fallback
+}
+
+const getPixelHeightFromCssSize = (value) => {
+  const match = safeText(value).trim().match(/^(\d+(?:\.\d+)?)px$/i)
+  return match ? Number(match[1]) : 0
+}
+
 const normalizeActionConfig = (actionConfig, fallbackAction = "more-info") => {
   if (!actionConfig || typeof actionConfig !== "object") {
     return { action: fallbackAction }
@@ -234,8 +365,49 @@ const getEntityName = (hass, entityState, fallbackEntityId, entityConfig = {}) =
   return entityState?.attributes?.friendly_name || fallbackEntityId
 }
 
-const getEntityIcon = (entityState, explicitIcon) =>
-  explicitIcon || entityState?.attributes?.icon || "mdi:help-circle"
+const getEntityIcon = (hass, entityState, entityConfig = {}) => {
+  const entityId = entityConfig.entity || entityState?.entity_id || ""
+  const domain = entityId.split(".")[0]
+  const registryIcon = hass?.entities?.[entityId]?.icon
+  const explicitIcon = entityConfig.icon || entityState?.attributes?.icon || registryIcon
+
+  if (explicitIcon) {
+    return explicitIcon
+  }
+
+  const state = entityState?.state
+  const deviceClass = safeText(entityState?.attributes?.device_class).toLowerCase()
+
+  if (domain === "binary_sensor") {
+    const pair = BINARY_SENSOR_DEVICE_CLASS_ICONS[deviceClass]
+    if (pair) {
+      return state === "on" ? pair[1] : pair[0]
+    }
+    return state === "on" ? "mdi:checkbox-marked-circle" : "mdi:checkbox-blank-circle-outline"
+  }
+
+  if (domain === "sensor") {
+    return SENSOR_DEVICE_CLASS_ICONS[deviceClass] || DOMAIN_ICONS.sensor
+  }
+
+  if (domain === "cover") {
+    return COVER_DEVICE_CLASS_ICONS[deviceClass] || "mdi:window-shutter"
+  }
+
+  if (domain === "light") {
+    return state === "on" ? "mdi:lightbulb-on" : "mdi:lightbulb"
+  }
+
+  if (domain === "switch" || domain === "input_boolean") {
+    return state === "on" ? "mdi:toggle-switch" : "mdi:toggle-switch-off"
+  }
+
+  if (domain === "lock") {
+    return state === "unlocked" ? "mdi:lock-open-variant" : "mdi:lock"
+  }
+
+  return DOMAIN_ICONS[domain] || "mdi:checkbox-blank-circle-outline"
+}
 
 const applyNavigation = (path, replace = false) => {
   if (!path) {
@@ -406,10 +578,11 @@ class AlphaAreaCard extends HTMLElement {
 
   static getGridOptions() {
     return {
-      columns: 6,
-      min_columns: 3,
+      columns: 12,
+      min_columns: 12,
+      max_columns: 12,
       rows: 3,
-      min_rows: 2,
+      min_rows: 1,
     }
   }
 
@@ -500,6 +673,7 @@ class AlphaAreaCard extends HTMLElement {
     )
     merged.features = Array.isArray(merged.features) ? merged.features.filter(Boolean) : []
     merged.camera_entity = safeText(merged.camera_entity || merged.camera_image)
+    merged.height = normalizeCssSize(merged.height)
 
     this.config = merged
     this._computeRenderModel()
@@ -531,17 +705,26 @@ class AlphaAreaCard extends HTMLElement {
   }
 
   getCardSize() {
-    return this.config?.display_type === "compact" ? 2 : 3
+    return this._getGridRows()
   }
 
   getGridOptions() {
-    const compact = this.config?.display_type === "compact"
     return {
-      columns: compact ? 6 : 6,
-      min_columns: 3,
-      rows: compact ? 2 : 3,
-      min_rows: 2,
+      columns: 12,
+      min_columns: 12,
+      max_columns: 12,
+      rows: this._getGridRows(),
+      min_rows: 1,
     }
+  }
+
+  _getGridRows() {
+    const configuredHeight = normalizeCssSize(this.config?.height)
+    const pixelHeight = getPixelHeightFromCssSize(configuredHeight)
+    if (pixelHeight) {
+      return Math.max(1, Math.ceil(pixelHeight / 56))
+    }
+    return this.config?.display_type === "compact" ? 2 : 3
   }
 
   _shouldRefresh(previousHass, nextHass) {
@@ -867,24 +1050,7 @@ class AlphaAreaCard extends HTMLElement {
   }
 
   _getSensorClassIcon(deviceClass) {
-    const icons = {
-      apparent_power: "mdi:flash",
-      battery: "mdi:battery",
-      carbon_dioxide: "mdi:molecule-co2",
-      carbon_monoxide: "mdi:molecule-co",
-      current: "mdi:current-ac",
-      energy: "mdi:lightning-bolt",
-      gas: "mdi:meter-gas",
-      humidity: "mdi:water-percent",
-      illuminance: "mdi:brightness-5",
-      monetary: "mdi:cash",
-      power: "mdi:flash",
-      pressure: "mdi:gauge",
-      temperature: "mdi:thermometer",
-      voltage: "mdi:sine-wave",
-      water: "mdi:water",
-    }
-    return icons[deviceClass] || "mdi:gauge"
+    return SENSOR_DEVICE_CLASS_ICONS[deviceClass] || "mdi:gauge"
   }
 
   _formatDeviceClassLabel(deviceClass) {
@@ -1159,7 +1325,7 @@ class AlphaAreaCard extends HTMLElement {
       return ""
     }
 
-    const icon = getEntityIcon(entityState, entityConfig.icon)
+    const icon = getEntityIcon(hass, entityState, entityConfig)
     const name = getEntityName(hass, entityState, entityConfig.entity, entityConfig)
     const isOn = entityState?.state === "on"
     const displayState = getDisplayState(
@@ -1168,7 +1334,7 @@ class AlphaAreaCard extends HTMLElement {
       hass?.entities?.[entityConfig.entity],
       entityConfig
     )
-    const title = `${name}: ${displayState}`
+    const title = displayState ? `${name}: ${displayState}` : name
 
     const stateColorAttr = shouldUseStateColor(entityConfig, this.config)
       ? ' data-state-color="1"'
@@ -1183,7 +1349,7 @@ class AlphaAreaCard extends HTMLElement {
 
     return `
       <button class=\"entity ${asSensorLine ? "sensor" : "action"} ${entityConfig.alert ? "alert" : ""} ${isOn ? "is-on" : ""}\" data-entity-id=\"${escapeAttribute(entityConfig.entity)}\" title=\"${escapeAttribute(title)}\"${stateColorAttr}>
-        <ha-state-icon icon=\"${escapeAttribute(icon)}\" class=\"entity-icon\"></ha-state-icon>
+        <ha-icon icon=\"${escapeAttribute(icon)}\" class=\"entity-icon\"></ha-icon>
         ${asSensorLine ? `<span class=\"entity-label\">${escapeHtml(name)}</span>` : ""}
         ${sensorHtml}
         ${badgeHtml}
@@ -1242,6 +1408,9 @@ class AlphaAreaCard extends HTMLElement {
     const backgroundImage = this._getBackgroundImage()
     const areaIcon = this._getAreaIcon()
     const aspectRatio = this._getAspectRatioCss()
+    const configuredHeight = normalizeCssSize(this.config.height)
+    const cardHeight = configuredHeight || (compact ? "112px" : "180px")
+    const fixedHeight = Boolean(configuredHeight)
     const darkenFilter = this._getDarkenFilter()
     const styles = this.config.styles || {}
 
@@ -1292,6 +1461,8 @@ class AlphaAreaCard extends HTMLElement {
       backgroundImage,
       areaIcon,
       aspectRatio,
+      cardHeight,
+      fixedHeight,
       darkenFilter,
       sensorButtons,
       sensorSummaryButtons,
@@ -1335,29 +1506,34 @@ class AlphaAreaCard extends HTMLElement {
           --mac-title-text-transform: ${STYLE_DEFAULTS.title_text_transform};
           --mac-title-text-shadow: ${STYLE_DEFAULTS.title_text_shadow};
           --mac-image-blur: ${STYLE_DEFAULTS.image_blur};
-          --mac-card-height: ${compact ? "112px" : "180px"};
+          --mac-card-height: ${cardHeight};
           --mac-aspect-ratio: ${aspectRatio};
+          width: 100%;
+          min-width: 0;
         }
 
         ha-card {
           position: relative;
           overflow: hidden;
+          width: 100%;
+          box-sizing: border-box;
           border-radius: var(--ha-card-border-radius, 16px);
           background: var(--card-background-color, #1f2937);
           color: var(--primary-text-color, #f8fafc);
           min-height: var(--mac-card-height);
-          aspect-ratio: ${compact ? "auto" : "var(--mac-aspect-ratio)"};
-          height: auto;
+          max-height: ${fixedHeight ? "var(--mac-card-height)" : "none"};
+          aspect-ratio: ${compact || fixedHeight ? "auto" : "var(--mac-aspect-ratio)"};
+          height: ${fixedHeight ? "var(--mac-card-height)" : "auto"};
           display: flex;
           flex-direction: column;
-          justify-content: center;
+          justify-content: stretch;
           cursor: pointer;
           transition: transform 160ms ease, box-shadow 160ms ease;
           border: 1px solid color-mix(in srgb, var(--divider-color, rgba(148, 163, 184, 0.28)) 70%, transparent);
           ${cardStyle}
         }
 
-        ha-card.is-compact {
+        ha-card.is-compact:not(.has-fixed-height) {
           min-height: 104px;
         }
 
@@ -1395,9 +1571,11 @@ class AlphaAreaCard extends HTMLElement {
           position: relative;
           z-index: 1;
           display: grid;
+          grid-template-rows: auto minmax(0, 1fr) auto;
           gap: 6px;
           padding: 12px 14px;
           height: 100%;
+          min-height: 0;
           box-sizing: border-box;
         }
 
@@ -1449,14 +1627,16 @@ class AlphaAreaCard extends HTMLElement {
           align-items: center;
           gap: 6px;
           min-height: ${hasSensors ? "32px" : "0"};
+          min-width: 0;
+          overflow: hidden;
         }
 
         .actions {
-          margin-top: auto;
           display: flex;
           align-items: center;
           justify-content: ${hasMedia ? "space-between" : "flex-end"};
           gap: 10px;
+          min-width: 0;
         }
 
         .actions-left,
@@ -1465,6 +1645,7 @@ class AlphaAreaCard extends HTMLElement {
           align-items: center;
           gap: 6px;
           flex-wrap: wrap;
+          min-width: 0;
         }
 
         .entity {
@@ -1476,6 +1657,8 @@ class AlphaAreaCard extends HTMLElement {
           display: inline-flex;
           align-items: center;
           gap: 6px;
+          min-width: 0;
+          max-width: 100%;
           cursor: pointer;
           padding: 6px 8px;
           transition: background 150ms ease, transform 150ms ease, color 150ms ease;
@@ -1516,11 +1699,16 @@ class AlphaAreaCard extends HTMLElement {
         .entity-label {
           font-size: 0.74rem;
           opacity: 0.86;
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
 
         .sensor-value {
           font-size: 0.8rem;
           font-weight: 600;
+          white-space: nowrap;
         }
 
         .entity-icon {
@@ -1569,7 +1757,7 @@ class AlphaAreaCard extends HTMLElement {
         }
       </style>
 
-      <ha-card class=\"display-${displayType} ${compact ? "is-compact" : ""} ${backgroundImage ? "has-background" : "no-background"}\">
+      <ha-card class=\"display-${displayType} ${compact ? "is-compact" : ""} ${fixedHeight ? "has-fixed-height" : ""} ${backgroundImage ? "has-background" : "no-background"}\">
         ${backgroundImage ? `<div class=\"bg\"><img src=\"${escapeAttribute(backgroundImage)}\" alt=\"${escapeAttribute(title)}\"></div><div class=\"overlay\"></div>` : ""}
         <ha-icon class=\"area-icon\" icon=\"${escapeAttribute(areaIcon)}\"></ha-icon>
         <div class=\"content\">
@@ -1652,6 +1840,7 @@ class AlphaAreaCardEditor extends LitElement {
       FEATURE_POSITIONS,
       "bottom"
     )
+    this.config.height = normalizeCssSize(this.config.height)
     this._jsonErrors = {}
   }
 
@@ -1750,7 +1939,13 @@ class AlphaAreaCardEditor extends LitElement {
   }
 
   _onNumber(path, event, min = null) {
-    const raw = Number(event.target.value)
+    const text = safeText(event.target.value).trim()
+    if (!text) {
+      this._removeValue(path)
+      return
+    }
+
+    const raw = Number(text)
     if (Number.isNaN(raw)) {
       this._removeValue(path)
       return
@@ -1758,6 +1953,19 @@ class AlphaAreaCardEditor extends LitElement {
 
     const value = typeof min === "number" ? Math.max(min, raw) : raw
     this._setValue(path, value)
+  }
+
+  _onCssSize(path, event) {
+    const raw = safeText(event.target.value).trim()
+    if (!raw) {
+      this._removeValue(path)
+      return
+    }
+
+    const normalized = normalizeCssSize(raw)
+    if (normalized) {
+      this._setValue(path, normalized)
+    }
   }
 
   _onDomains(path, event) {
@@ -2114,6 +2322,13 @@ class AlphaAreaCardEditor extends LitElement {
               <option value="icon">icon</option>
               <option value="compact">compact</option>
             </select>
+
+            <label>Hauteur fixe de la carte</label>
+            <input
+              .value="${this.config.height || ""}"
+              placeholder="180px, 22rem, 40vh"
+              @change="${(event) => this._onCssSize("height", event)}"
+            />
 
             ${this.config.display_type === "camera"
               ? html`
