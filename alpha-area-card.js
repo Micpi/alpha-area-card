@@ -37,6 +37,8 @@ const ENTITY_POSITIONS = [
 ]
 const ENTITY_DISPLAY_MODES = ["button", "text", "icon"]
 const ENTITY_BADGE_POSITIONS = ["top-right", "top-left", "bottom-right", "bottom-left"]
+const ENTITY_BADGE_MODES = ["auto", "state", "count_on", "text"]
+const ENTITY_BADGE_SHOW_WHEN = ["auto", "always", "active", "on", "nonzero", "state"]
 const TITLE_EFFECTS = ["none", "shadow", "neon", "outline"]
 const DEFAULT_SENSOR_CLASSES = ["temperature", "humidity"]
 const DEFAULT_ALERT_CLASSES = ["moisture", "motion"]
@@ -191,6 +193,7 @@ const STYLE_DEFAULTS = {
   title_text_transform: "none",
   title_text_shadow: "",
   image_blur: "0px",
+  border_radius: "16px",
 }
 
 const ENTITY_DEFAULTS = {
@@ -334,6 +337,12 @@ const normalizeEntityDisplayMode = (value, fallback = "button") =>
 
 const normalizeEntityBadgePosition = (value, fallback = "top-right") =>
   ENTITY_BADGE_POSITIONS.includes(value) ? value : fallback
+
+const normalizeEntityBadgeMode = (value, fallback = "auto") =>
+  ENTITY_BADGE_MODES.includes(value) ? value : fallback
+
+const normalizeEntityBadgeShowWhen = (value, fallback = "auto") =>
+  ENTITY_BADGE_SHOW_WHEN.includes(value) ? value : fallback
 
 const normalizeTitleEffect = (value, fallback = "shadow") =>
   TITLE_EFFECTS.includes(value) ? value : fallback
@@ -739,6 +748,7 @@ class AlphaAreaCard extends HTMLElement {
     merged.features = Array.isArray(merged.features) ? merged.features.filter(Boolean) : []
     merged.camera_entity = safeText(merged.camera_entity || merged.camera_image)
     merged.height = normalizeCssSize(merged.height)
+    merged.styles.border_radius = normalizeCssSize(merged.styles.border_radius, "16px")
     merged.styles.title_effect = normalizeTitleEffect(merged.styles.title_effect, "shadow")
     merged.entity_defaults.position = normalizeEntityPosition(merged.entity_defaults.position, "")
     merged.entity_defaults.display_mode = normalizeEntityDisplayMode(
@@ -820,11 +830,34 @@ class AlphaAreaCard extends HTMLElement {
     }
 
     const trackedEntityIds = new Set()
+    const addTrackedEntity = (entityId) => {
+      const id = safeText(entityId).trim()
+      if (!id) {
+        return
+      }
+
+      trackedEntityIds.add(id)
+
+      const previousMembers = previousHass.states?.[id]?.attributes?.entity_id
+      const nextMembers = nextHass.states?.[id]?.attributes?.entity_id
+      const memberLists = [previousMembers, nextMembers]
+      memberLists.forEach((members) => {
+        if (Array.isArray(members)) {
+          members.forEach((memberId) => trackedEntityIds.add(memberId))
+        }
+      })
+    }
+
     for (const entityConfig of tracked) {
       if (Array.isArray(entityConfig.source_entities)) {
-        entityConfig.source_entities.forEach((entityId) => trackedEntityIds.add(entityId))
+        entityConfig.source_entities.forEach((entityId) => addTrackedEntity(entityId))
       } else if (entityConfig.entity) {
-        trackedEntityIds.add(entityConfig.entity)
+        addTrackedEntity(entityConfig.entity)
+      }
+
+      const badgeEntityId = this._getEntityBadgeSourceId(entityConfig)
+      if (badgeEntityId) {
+        addTrackedEntity(badgeEntityId)
       }
     }
 
@@ -1526,22 +1559,65 @@ class AlphaAreaCard extends HTMLElement {
     `
   }
 
-  _getLightBadgeText(entityId) {
+  _getNestedBadgeConfig(entityConfig = {}) {
+    const rawBadge = entityConfig.badge
+    return rawBadge && typeof rawBadge === "object" ? rawBadge : {}
+  }
+
+  _getEntityBadgeSourceId(entityConfig = {}) {
+    const nested = this._getNestedBadgeConfig(entityConfig)
+    return safeText(
+      nested.entity || nested.entity_id || nested.source_entity || entityConfig.badge_entity || entityConfig.entity
+    ).trim()
+  }
+
+  _getBadgeMemberCount(entityId) {
     const state = this._hass?.states?.[entityId]
     const members = state?.attributes?.entity_id
     if (!Array.isArray(members) || members.length === 0) {
-      return ""
+      return null
     }
 
-    const activeCount = members.reduce((count, memberId) => {
+    return members.reduce((count, memberId) => {
       return this._hass?.states?.[memberId]?.state === "on" ? count + 1 : count
     }, 0)
+  }
 
-    if (!activeCount) {
+  _getBadgeNumericValue(entityId, text = "") {
+    const memberCount = this._getBadgeMemberCount(entityId)
+    if (memberCount !== null) {
+      return memberCount
+    }
+
+    const sourceState = this._hass?.states?.[entityId]
+    const rawState = safeText(sourceState?.state).trim()
+    if (rawState) {
+      const stateValue = Number(rawState.replace(",", "."))
+      if (Number.isFinite(stateValue)) {
+        return stateValue
+      }
+    }
+
+    const rawText = safeText(text).trim()
+    if (rawText) {
+      const textValue = Number(rawText.replace(",", "."))
+      if (Number.isFinite(textValue)) {
+        return textValue
+      }
+    }
+
+    return null
+  }
+
+  _getBadgeDisplayState(entityId) {
+    const sourceState = this._hass?.states?.[entityId]
+    if (!sourceState) {
       return ""
     }
 
-    return safeText(activeCount)
+    return getDisplayState(this._hass, sourceState, this._hass?.entities?.[entityId], {
+      entity: entityId,
+    })
   }
 
   _getEntityBadgeConfig(entityConfig, displayState) {
@@ -1550,32 +1626,96 @@ class AlphaAreaCard extends HTMLElement {
       return null
     }
 
-    const nested = rawBadge && typeof rawBadge === "object" ? rawBadge : {}
+    const nested = this._getNestedBadgeConfig(entityConfig)
+    const pickText = (...values) => {
+      for (const value of values) {
+        const text = safeText(value).trim()
+        if (text) {
+          return text
+        }
+      }
+      return ""
+    }
+
+    const sourceEntityId = this._getEntityBadgeSourceId(entityConfig)
+    const sourceState = this._hass?.states?.[sourceEntityId]
+    const mode = normalizeEntityBadgeMode(nested.mode || entityConfig.badge_mode)
+    const showWhen = normalizeEntityBadgeShowWhen(
+      nested.show_when || nested.showWhen || entityConfig.badge_show_when
+    )
+    const expectedState = pickText(nested.state, nested.show_state, entityConfig.badge_state)
+    const flatBadgeKeys = [
+      "badge_entity",
+      "badge_mode",
+      "badge_show_when",
+      "badge_state",
+      "badge_text",
+      "badge_icon",
+      "badge_color",
+      "badge_background",
+      "badge_border_color",
+      "badge_position",
+    ]
     const hasCustomBadge =
       rawBadge === true ||
       Object.keys(nested).length > 0 ||
-      [
-        "badge_text",
-        "badge_icon",
-        "badge_color",
-        "badge_background",
-        "badge_border_color",
-        "badge_position",
-      ].some((key) => entityConfig[key] !== undefined && entityConfig[key] !== "")
+      flatBadgeKeys.some((key) => entityConfig[key] !== undefined && entityConfig[key] !== "")
 
-    const automaticText = entityConfig.entity.startsWith("light.")
-      ? this._getLightBadgeText(entityConfig.entity)
-      : ""
+    const memberCount = this._getBadgeMemberCount(sourceEntityId)
+    const numericValue = this._getBadgeNumericValue(sourceEntityId)
+    const sourceIsDifferent = Boolean(sourceEntityId && sourceEntityId !== entityConfig.entity)
+    let text = pickText(nested.text, entityConfig.badge_text)
 
-    if (!hasCustomBadge && !automaticText) {
+    if (!text) {
+      if (mode === "count_on") {
+        text = numericValue !== null ? safeText(numericValue) : ""
+      } else if (mode === "auto" && memberCount !== null) {
+        text = memberCount > 0 ? safeText(memberCount) : ""
+      } else if (mode === "state" || (mode === "auto" && sourceIsDifferent)) {
+        text = this._getBadgeDisplayState(sourceEntityId)
+      } else if (rawBadge === true) {
+        text = displayState
+      }
+    }
+
+    const icon = pickText(nested.icon, entityConfig.badge_icon)
+
+    if (!hasCustomBadge && !text && !icon) {
       return null
     }
 
-    const text =
-      safeText(nested.text || entityConfig.badge_text || automaticText || (rawBadge === true ? displayState : ""))
-    const icon = safeText(nested.icon || entityConfig.badge_icon)
+    const sourceIsVisible = (() => {
+      if (showWhen === "always") {
+        return true
+      }
+      if (showWhen === "state") {
+        return expectedState ? safeText(sourceState?.state) === expectedState : false
+      }
+      if (showWhen === "on") {
+        return sourceState?.state === "on"
+      }
+      if (showWhen === "active") {
+        return isEntityActive(sourceState)
+      }
+      if (showWhen === "nonzero") {
+        const value = this._getBadgeNumericValue(sourceEntityId, text)
+        return value !== null && value > 0
+      }
+      if (mode === "text") {
+        return Boolean(text || icon)
+      }
+      if (mode === "count_on" || memberCount !== null) {
+        const value = this._getBadgeNumericValue(sourceEntityId, text)
+        return value !== null && value > 0
+      }
+      if (sourceIsDifferent) {
+        const value = this._getBadgeNumericValue(sourceEntityId, text)
+        return value !== null ? value > 0 : isEntityActive(sourceState)
+      }
+      return Boolean(text || icon)
+    })()
 
-    if (!text && !icon) {
+    if (!sourceIsVisible || (!text && !icon)) {
       return null
     }
 
@@ -1634,6 +1774,7 @@ class AlphaAreaCard extends HTMLElement {
       "--mac-title-text-transform": styles.title_text_transform,
       "--mac-title-text-shadow": styles.title_text_shadow,
       "--mac-image-blur": styles.image_blur,
+      "--mac-card-border-radius": normalizeCssSize(styles.border_radius, "16px"),
     }
 
     return Object.entries(vars)
@@ -1762,6 +1903,7 @@ class AlphaAreaCard extends HTMLElement {
           --mac-title-text-transform: ${STYLE_DEFAULTS.title_text_transform};
           --mac-title-text-shadow: ${STYLE_DEFAULTS.title_text_shadow};
           --mac-image-blur: ${STYLE_DEFAULTS.image_blur};
+          --mac-card-border-radius: ${STYLE_DEFAULTS.border_radius};
           --mac-card-height: ${cardHeight};
           --mac-aspect-ratio: ${aspectRatio};
           width: 100%;
@@ -1773,7 +1915,7 @@ class AlphaAreaCard extends HTMLElement {
           overflow: visible;
           width: 100%;
           box-sizing: border-box;
-          border-radius: var(--ha-card-border-radius, 16px);
+          border-radius: var(--mac-card-border-radius, var(--ha-card-border-radius, 16px));
           background: var(--card-background-color, #1f2937);
           color: var(--primary-text-color, #f8fafc);
           min-height: var(--mac-card-height);
@@ -2203,6 +2345,7 @@ class AlphaAreaCardEditor extends LitElement {
       "bottom"
     )
     this.config.height = normalizeCssSize(this.config.height)
+    this.config.styles.border_radius = normalizeCssSize(this.config.styles.border_radius, "16px")
     this.config.styles.title_effect = normalizeTitleEffect(this.config.styles.title_effect, "shadow")
     this.config.entity_defaults.position = normalizeEntityPosition(
       this.config.entity_defaults.position,
@@ -2321,23 +2464,6 @@ class AlphaAreaCardEditor extends LitElement {
     this._setValue(path, event.target.checked)
   }
 
-  _onNumber(path, event, min = null) {
-    const text = safeText(event.target.value).trim()
-    if (!text) {
-      this._removeValue(path)
-      return
-    }
-
-    const raw = Number(text)
-    if (Number.isNaN(raw)) {
-      this._removeValue(path)
-      return
-    }
-
-    const value = typeof min === "number" ? Math.max(min, raw) : raw
-    this._setValue(path, value)
-  }
-
   _onCssSize(path, event) {
     const raw = safeText(event.target.value).trim()
     if (!raw) {
@@ -2349,168 +2475,6 @@ class AlphaAreaCardEditor extends LitElement {
     if (normalized) {
       this._setValue(path, normalized)
     }
-  }
-
-  _onDomains(path, event) {
-    const value = safeText(event.target.value).trim()
-    if (!value) {
-      this._removeValue(path)
-      return
-    }
-    this._setValue(path, parseDomainsText(value))
-  }
-
-  _onStringList(path, event, lowerCase = false) {
-    const value = safeText(event.target.value).trim()
-    if (!value) {
-      this._removeValue(path)
-      return
-    }
-
-    const list = parseStringList(value).map((item) => (lowerCase ? item.toLowerCase() : item))
-    this._setValue(path, list)
-  }
-
-  _domainsToText(value) {
-    return Array.isArray(value) ? value.join(", ") : ""
-  }
-
-  _hasAreaControlsFeature() {
-    return (this.config.features || []).some((feature) => {
-      const type = typeof feature === "string" ? feature : feature?.type
-      return AREA_CONTROL_FEATURE_TYPES.has(safeText(type))
-    })
-  }
-
-  _toggleAreaControlsFeature(enabled) {
-    const existing = Array.isArray(this.config.features) ? this.config.features : []
-    const features = existing.filter((feature) => {
-      const type = typeof feature === "string" ? feature : feature?.type
-      return !AREA_CONTROL_FEATURE_TYPES.has(safeText(type))
-    })
-
-    if (enabled) {
-      features.unshift({ type: "area-controls" })
-    }
-
-    if (features.length) {
-      this._setValue("features", features)
-      return
-    }
-
-    this._removeValue("features")
-  }
-
-  _readPath(path) {
-    const parts = path.split(".")
-    let node = this.config
-    for (const part of parts) {
-      node = node?.[part]
-    }
-    return node
-  }
-
-  _updateActionType(path, action) {
-    const current = this._readPath(path) || {}
-    this._setValue(path, {
-      ...current,
-      action,
-    })
-  }
-
-  _updateActionJson(path, key, event) {
-    const raw = safeText(event.target.value).trim()
-    if (!raw) {
-      const current = { ...(this._readPath(path) || {}) }
-      delete current[key]
-      this._setValue(path, current)
-      this._jsonErrors = { ...this._jsonErrors, [`${path}.${key}`]: "" }
-      return
-    }
-
-    try {
-      const parsed = JSON.parse(raw)
-      const current = { ...(this._readPath(path) || {}) }
-      current[key] = parsed
-      this._setValue(path, current)
-      this._jsonErrors = { ...this._jsonErrors, [`${path}.${key}`]: "" }
-    } catch (_error) {
-      this._jsonErrors = {
-        ...this._jsonErrors,
-        [`${path}.${key}`]: "JSON invalide. Utiliser un objet JSON valide.",
-      }
-    }
-  }
-
-  _renderActionEditor(path, label) {
-    const actionConfig = normalizeActionConfig(
-      this._readPath(path),
-      path === "tap_action" ? "more-info" : "none"
-    )
-    const actionType = actionConfig.action || "none"
-    const dataError = this._jsonErrors?.[`${path}.service_data`] || ""
-    const targetError = this._jsonErrors?.[`${path}.target`] || ""
-
-    return html`
-      <div class="action-block">
-        <label>${label}</label>
-        <select
-          .value="${actionType}"
-          @change="${(event) => this._updateActionType(path, event.target.value)}"
-        >
-          ${ACTION_OPTIONS.map((option) => html`<option value="${option}">${option}</option>`)}
-        </select>
-
-        ${actionType === "navigate"
-          ? html`
-              <label>Chemin de navigation</label>
-              <input
-                .value="${actionConfig.navigation_path || ""}"
-                placeholder="/lovelace/cuisine"
-                @input="${(event) => this._onInput(`${path}.navigation_path`, event)}"
-              />
-            `
-          : ""}
-        ${actionType === "url"
-          ? html`
-              <label>URL</label>
-              <input
-                .value="${actionConfig.url_path || ""}"
-                placeholder="https://example.com"
-                @input="${(event) => this._onInput(`${path}.url_path`, event)}"
-              />
-            `
-          : ""}
-        ${actionType === "call-service"
-          ? html`
-              <label>Service</label>
-              <input
-                .value="${actionConfig.service || ""}"
-                placeholder="light.turn_on"
-                @input="${(event) => this._onInput(`${path}.service`, event)}"
-              />
-
-              <label>Service data (JSON objet)</label>
-              <textarea
-                .value="${actionConfig.service_data
-                  ? JSON.stringify(actionConfig.service_data, null, 2)
-                  : ""}"
-                placeholder='{"brightness_pct": 80}'
-                @change="${(event) => this._updateActionJson(path, "service_data", event)}"
-              ></textarea>
-              ${dataError ? html`<div class="error-text">${dataError}</div>` : ""}
-
-              <label>Target (JSON objet)</label>
-              <textarea
-                .value="${actionConfig.target ? JSON.stringify(actionConfig.target, null, 2) : ""}"
-                placeholder='{"entity_id": "light.cuisine"}'
-                @change="${(event) => this._updateActionJson(path, "target", event)}"
-              ></textarea>
-              ${targetError ? html`<div class="error-text">${targetError}</div>` : ""}
-            `
-          : ""}
-      </div>
-    `
   }
 
   _toHexColor(value, fallback = "#c7a975") {
@@ -2658,6 +2622,148 @@ class AlphaAreaCardEditor extends LitElement {
     this._setEntityOption(index, key, event.target.checked)
   }
 
+  _getActionFallback(actionKey) {
+    return actionKey === "tap_action" ? "more-info" : "none"
+  }
+
+  _readEntityAction(index, actionKey) {
+    const entityConfig = parseEntityConfig((this.config.entities || [])[index]) || {}
+    return normalizeActionConfig(entityConfig[actionKey], this._getActionFallback(actionKey))
+  }
+
+  _setEntityAction(index, actionKey, actionConfig) {
+    this._updateEntityItem(index, (entityConfig) => {
+      const cleaned = { ...actionConfig }
+      for (const [key, value] of Object.entries(cleaned)) {
+        if (key === "action") {
+          continue
+        }
+        if (value === "" || value === undefined || value === null) {
+          delete cleaned[key]
+        }
+      }
+      entityConfig[actionKey] = cleaned
+    })
+  }
+
+  _updateEntityActionType(index, actionKey, action) {
+    const current = this._readEntityAction(index, actionKey)
+    this._setEntityAction(index, actionKey, {
+      ...current,
+      action,
+    })
+  }
+
+  _updateEntityActionInput(index, actionKey, key, event) {
+    const current = this._readEntityAction(index, actionKey)
+    const value = safeText(event.target.value).trim()
+    if (!value) {
+      delete current[key]
+    } else {
+      current[key] = value
+    }
+    this._setEntityAction(index, actionKey, current)
+  }
+
+  _updateEntityActionJson(index, actionKey, key, event) {
+    const errorKey = `entity.${index}.${actionKey}.${key}`
+    const raw = safeText(event.target.value).trim()
+    if (!raw) {
+      const current = this._readEntityAction(index, actionKey)
+      delete current[key]
+      this._setEntityAction(index, actionKey, current)
+      this._jsonErrors = { ...this._jsonErrors, [errorKey]: "" }
+      return
+    }
+
+    try {
+      const parsed = JSON.parse(raw)
+      const current = this._readEntityAction(index, actionKey)
+      current[key] = parsed
+      this._setEntityAction(index, actionKey, current)
+      this._jsonErrors = { ...this._jsonErrors, [errorKey]: "" }
+    } catch (_error) {
+      this._jsonErrors = {
+        ...this._jsonErrors,
+        [errorKey]: "JSON invalide. Utiliser un objet JSON valide.",
+      }
+      this.requestUpdate()
+    }
+  }
+
+  _renderEntityActionEditor(index, actionKey, label) {
+    const actionConfig = this._readEntityAction(index, actionKey)
+    const actionType = actionConfig.action || "none"
+    const dataError = this._jsonErrors?.[`entity.${index}.${actionKey}.service_data`] || ""
+    const targetError = this._jsonErrors?.[`entity.${index}.${actionKey}.target`] || ""
+
+    return html`
+      <div class="action-block">
+        <label>${label}</label>
+        <select
+          .value="${actionType}"
+          @change="${(event) => this._updateEntityActionType(index, actionKey, event.target.value)}"
+        >
+          ${ACTION_OPTIONS.map((option) => html`<option value="${option}">${option}</option>`)}
+        </select>
+
+        ${actionType === "navigate"
+          ? html`
+              <label>Chemin de navigation</label>
+              <input
+                .value="${actionConfig.navigation_path || ""}"
+                placeholder="/lovelace/cuisine"
+                @input="${(event) =>
+                  this._updateEntityActionInput(index, actionKey, "navigation_path", event)}"
+              />
+            `
+          : ""}
+        ${actionType === "url"
+          ? html`
+              <label>URL</label>
+              <input
+                .value="${actionConfig.url_path || ""}"
+                placeholder="https://example.com"
+                @input="${(event) =>
+                  this._updateEntityActionInput(index, actionKey, "url_path", event)}"
+              />
+            `
+          : ""}
+        ${actionType === "call-service"
+          ? html`
+              <label>Service</label>
+              <input
+                .value="${actionConfig.service || ""}"
+                placeholder="light.turn_on"
+                @input="${(event) =>
+                  this._updateEntityActionInput(index, actionKey, "service", event)}"
+              />
+
+              <label>Service data (JSON objet)</label>
+              <textarea
+                .value="${actionConfig.service_data
+                  ? JSON.stringify(actionConfig.service_data, null, 2)
+                  : ""}"
+                placeholder='{"brightness_pct": 80}'
+                @change="${(event) =>
+                  this._updateEntityActionJson(index, actionKey, "service_data", event)}"
+              ></textarea>
+              ${dataError ? html`<div class="error-text">${dataError}</div>` : ""}
+
+              <label>Target (JSON objet)</label>
+              <textarea
+                .value="${actionConfig.target ? JSON.stringify(actionConfig.target, null, 2) : ""}"
+                placeholder='{"entity_id": "light.cuisine"}'
+                @change="${(event) =>
+                  this._updateEntityActionJson(index, actionKey, "target", event)}"
+              ></textarea>
+              ${targetError ? html`<div class="error-text">${targetError}</div>` : ""}
+            `
+          : ""}
+      </div>
+    `
+  }
+
   _isEntityBadgeEnabled(entityConfig = {}) {
     if (entityConfig.badge === false || entityConfig.badge?.enabled === false) {
       return false
@@ -2665,6 +2771,10 @@ class AlphaAreaCardEditor extends LitElement {
     return Boolean(
       entityConfig.badge === true ||
         (entityConfig.badge && typeof entityConfig.badge === "object") ||
+        entityConfig.badge_entity ||
+        entityConfig.badge_mode ||
+        entityConfig.badge_show_when ||
+        entityConfig.badge_state ||
         entityConfig.badge_text ||
         entityConfig.badge_icon ||
         entityConfig.badge_color ||
@@ -2682,6 +2792,10 @@ class AlphaAreaCardEditor extends LitElement {
       }
 
       entityConfig.badge = false
+      delete entityConfig.badge_entity
+      delete entityConfig.badge_mode
+      delete entityConfig.badge_show_when
+      delete entityConfig.badge_state
       delete entityConfig.badge_text
       delete entityConfig.badge_icon
       delete entityConfig.badge_color
@@ -2689,6 +2803,42 @@ class AlphaAreaCardEditor extends LitElement {
       delete entityConfig.badge_border_color
       delete entityConfig.badge_position
     })
+  }
+
+  _renderBadgeModeSelect(value, onChange) {
+    const labels = {
+      auto: "Automatique",
+      state: "État de l'entité badge",
+      count_on: "Nombre allumé",
+      text: "Texte fixe",
+    }
+
+    return html`
+      <select .value="${value || "auto"}" @change="${onChange}">
+        ${ENTITY_BADGE_MODES.map(
+          (mode) => html`<option value="${mode}">${labels[mode]}</option>`
+        )}
+      </select>
+    `
+  }
+
+  _renderBadgeVisibilitySelect(value, onChange) {
+    const labels = {
+      auto: "Automatique",
+      always: "Toujours",
+      active: "Source active",
+      on: "Source allumée",
+      nonzero: "Nombre supérieur à 0",
+      state: "État précis",
+    }
+
+    return html`
+      <select .value="${value || "auto"}" @change="${onChange}">
+        ${ENTITY_BADGE_SHOW_WHEN.map(
+          (mode) => html`<option value="${mode}">${labels[mode]}</option>`
+        )}
+      </select>
+    `
   }
 
   _renderBadgePositionSelect(value, onChange) {
@@ -2855,53 +3005,6 @@ class AlphaAreaCardEditor extends LitElement {
     `
   }
 
-  _renderEntityDefaultsTab() {
-    const defaults = this.config.entity_defaults || DEFAULT_CONFIG.entity_defaults
-
-    return html`
-      <div class="entity-settings-grid">
-        <label>Position par défaut</label>
-        ${this._renderPositionSelect(
-          defaults.position || "",
-          (event) => this._setValue("entity_defaults.position", event.target.value),
-          true
-        )}
-
-        <label>Affichage par défaut</label>
-        ${this._renderDisplayModeSelect(
-          defaults.display_mode || "button",
-          (event) => this._setValue("entity_defaults.display_mode", event.target.value || "button"),
-          false
-        )}
-
-        <label>
-          <input
-            type="checkbox"
-            .checked="${!!defaults.show_name}"
-            @change="${(event) => this._onBoolean("entity_defaults.show_name", event)}"
-          />
-          Afficher le nom par défaut
-        </label>
-
-        <label>
-          <input
-            type="checkbox"
-            .checked="${!!defaults.show_state}"
-            @change="${(event) => this._onBoolean("entity_defaults.show_state", event)}"
-          />
-          Afficher l'état par défaut
-        </label>
-
-        ${this._renderColorField("Icône active par défaut", "entity_defaults.icon_color_on", "#03A9F4")}
-        ${this._renderColorField("Icône inactive par défaut", "entity_defaults.icon_color_off", "#9CA3AF")}
-        ${this._renderColorField("Texte actif par défaut", "entity_defaults.text_color_on", "#03A9F4")}
-        ${this._renderColorField("Texte inactif par défaut", "entity_defaults.text_color_off", "#9CA3AF")}
-        ${this._renderColorField("Fond bouton actif par défaut", "entity_defaults.background_color_on", "#1f2937")}
-        ${this._renderColorField("Fond bouton inactif par défaut", "entity_defaults.background_color_off", "#111827")}
-      </div>
-    `
-  }
-
   _renderEntityDetailsTab() {
     const entities = this.config.entities || []
     const index = Math.max(0, Math.min(this._activeEntityIndex || 0, entities.length - 1))
@@ -2912,6 +3015,14 @@ class AlphaAreaCardEditor extends LitElement {
     }
 
     const badgeEnabled = this._isEntityBadgeEnabled(parsed)
+    const nestedBadge = parsed.badge && typeof parsed.badge === "object" ? parsed.badge : {}
+    const badgeEntity = parsed.badge_entity || nestedBadge.entity || nestedBadge.entity_id || ""
+    const badgeMode = parsed.badge_mode || nestedBadge.mode || "auto"
+    const badgeShowWhen = parsed.badge_show_when || nestedBadge.show_when || nestedBadge.showWhen || "auto"
+    const badgeState = parsed.badge_state || nestedBadge.state || nestedBadge.show_state || ""
+    const badgeText = parsed.badge_text || nestedBadge.text || ""
+    const badgeIcon = parsed.badge_icon || nestedBadge.icon || ""
+    const badgePosition = parsed.badge_position || nestedBadge.position || "top-right"
 
     return html`
       <div class="entity-detail">
@@ -3011,6 +3122,13 @@ class AlphaAreaCardEditor extends LitElement {
         </div>
 
         <div class="entity-subsection">
+          <div class="subsection-title">Actions de cette entité</div>
+          ${this._renderEntityActionEditor(index, "tap_action", "Tap")}
+          ${this._renderEntityActionEditor(index, "hold_action", "Hold / clic droit")}
+          ${this._renderEntityActionEditor(index, "double_tap_action", "Double tap")}
+        </div>
+
+        <div class="entity-subsection">
           <label>
             <input
               type="checkbox"
@@ -3022,22 +3140,52 @@ class AlphaAreaCardEditor extends LitElement {
 
           ${badgeEnabled
             ? html`
+                <label>Entité source du badge</label>
+                <ha-entity-picker
+                  .hass="${this.hass}"
+                  .value="${badgeEntity}"
+                  allow-custom-entity
+                  @value-changed="${(event) =>
+                    this._setEntityOption(index, "badge_entity", event.detail.value || "")}"
+                ></ha-entity-picker>
+
+                <label>Contenu du badge</label>
+                ${this._renderBadgeModeSelect(badgeMode, (event) =>
+                  this._setEntityOption(index, "badge_mode", event.target.value)
+                )}
+
+                <label>Afficher le badge si</label>
+                ${this._renderBadgeVisibilitySelect(badgeShowWhen, (event) =>
+                  this._setEntityOption(index, "badge_show_when", event.target.value)
+                )}
+
+                ${badgeShowWhen === "state"
+                  ? html`
+                      <label>État attendu</label>
+                      <input
+                        .value="${badgeState}"
+                        placeholder="on, home, heat..."
+                        @change="${(event) => this._onEntityInput(index, "badge_state", event)}"
+                      />
+                    `
+                  : ""}
+
                 <label>Texte badge</label>
                 <input
-                  .value="${parsed.badge_text || ""}"
-                  placeholder="1, ON, TV..."
+                  .value="${badgeText}"
+                  placeholder="Vide = automatique"
                   @change="${(event) => this._onEntityInput(index, "badge_text", event)}"
                 />
 
                 <label>Icône badge</label>
                 <input
-                  .value="${parsed.badge_icon || ""}"
+                  .value="${badgeIcon}"
                   placeholder="mdi:check"
                   @change="${(event) => this._onEntityInput(index, "badge_icon", event)}"
                 />
 
                 <label>Position badge</label>
-                ${this._renderBadgePositionSelect(parsed.badge_position || "top-right", (event) =>
+                ${this._renderBadgePositionSelect(badgePosition, (event) =>
                   this._setEntityOption(index, "badge_position", event.target.value)
                 )}
 
@@ -3054,10 +3202,11 @@ class AlphaAreaCardEditor extends LitElement {
   }
 
   _renderEntitiesPanel() {
-    const activeTab = this._activeEntityTab || "list"
+    const activeTab = ["list", "entity"].includes(this._activeEntityTab)
+      ? this._activeEntityTab
+      : "list"
     const tabs = [
       ["list", "Liste"],
-      ["defaults", "Défauts"],
       ["entity", "Réglages"],
     ]
 
@@ -3075,11 +3224,7 @@ class AlphaAreaCardEditor extends LitElement {
           `
         )}
       </div>
-      ${activeTab === "defaults"
-        ? this._renderEntityDefaultsTab()
-        : activeTab === "entity"
-          ? this._renderEntityDetailsTab()
-          : this._renderEntitiesField()}
+      ${activeTab === "entity" ? this._renderEntityDetailsTab() : this._renderEntitiesField()}
     `
   }
 
@@ -3144,23 +3289,6 @@ class AlphaAreaCardEditor extends LitElement {
         </details>
 
         <details>
-          <summary>Actions</summary>
-          <div class="section-content">
-            ${this._renderActionEditor("tap_action", "Action carte (tap)")}
-            ${this._renderActionEditor("hold_action", "Action carte (hold / clic droit)")}
-            ${this._renderActionEditor("double_tap_action", "Action carte (double tap)")}
-            ${this._renderActionEditor(
-              "entity_hold_action",
-              "Action par défaut des entités (hold / clic droit)"
-            )}
-            ${this._renderActionEditor(
-              "entity_double_tap_action",
-              "Action par défaut des entités (double tap)"
-            )}
-          </div>
-        </details>
-
-        <details>
           <summary>Apparence</summary>
           <div class="section-content">
             <label>Mode d'affichage</label>
@@ -3179,6 +3307,13 @@ class AlphaAreaCardEditor extends LitElement {
               .value="${this.config.height || ""}"
               placeholder="180px, 22rem, 40vh"
               @change="${(event) => this._onCssSize("height", event)}"
+            />
+
+            <label>Arrondi des coins</label>
+            <input
+              .value="${this.config.styles?.border_radius || ""}"
+              placeholder="16px, 1rem, 0"
+              @change="${(event) => this._onCssSize("styles.border_radius", event)}"
             />
 
             <label>Ratio image</label>
@@ -3267,109 +3402,6 @@ class AlphaAreaCardEditor extends LitElement {
               placeholder="2px"
               @change="${(event) => this._onInput("styles.image_blur", event)}"
             />
-          </div>
-        </details>
-
-        <details>
-          <summary>Defaults</summary>
-          <div class="section-content">
-            <label>Tri des entités</label>
-            <select
-              .value="${this.config.entity_sort || "none"}"
-              @change="${(event) => this._setValue("entity_sort", event.target.value)}"
-            >
-              <option value="none">Aucun</option>
-              <option value="name">Nom</option>
-              <option value="domain">Domaine</option>
-            </select>
-
-            <label>Nombre maximum d'entités (0 = illimité)</label>
-            <input
-              type="number"
-              min="0"
-              .value="${String(this.config.max_entities || 0)}"
-              @input="${(event) => this._onNumber("max_entities", event, 0)}"
-            />
-
-            <label>Domaines inclus (séparés par virgule)</label>
-            <input
-              .value="${this._domainsToText(this.config.include_domains)}"
-              placeholder="light, switch, media_player"
-              @change="${(event) => this._onDomains("include_domains", event)}"
-            />
-
-            <label>Domaines exclus (séparés par virgule)</label>
-            <input
-              .value="${this._domainsToText(this.config.exclude_domains)}"
-              placeholder="sensor, binary_sensor"
-              @change="${(event) => this._onDomains("exclude_domains", event)}"
-            />
-
-            <label>Entités exclues</label>
-            <textarea
-              .value="${this._domainsToText(this.config.exclude_entities)}"
-              placeholder="sensor.exemple, binary_sensor.exemple"
-              @change="${(event) => this._onStringList("exclude_entities", event)}"
-            ></textarea>
-
-            <label>Classes de capteurs</label>
-            <input
-              .value="${this._domainsToText(this.config.sensor_classes)}"
-              placeholder="temperature, humidity, power"
-              @change="${(event) => this._onStringList("sensor_classes", event, true)}"
-            />
-
-            <label>Classes d'alertes</label>
-            <input
-              .value="${this._domainsToText(this.config.alert_classes)}"
-              placeholder="motion, moisture, opening"
-              @change="${(event) => this._onStringList("alert_classes", event, true)}"
-            />
-
-            <label>
-              <input
-                type="checkbox"
-                .checked="${this._hasAreaControlsFeature()}"
-                @change="${(event) => this._toggleAreaControlsFeature(event.target.checked)}"
-              />
-              Feature HA area-controls
-            </label>
-
-            <label>Position des features</label>
-            <select
-              .value="${this.config.features_position || "bottom"}"
-              @change="${(event) => this._setValue("features_position", event.target.value)}"
-            >
-              <option value="bottom">bottom</option>
-              <option value="inline">inline</option>
-            </select>
-
-            <label>
-              <input
-                type="checkbox"
-                .checked="${!!this.config.force_dialog}"
-                @change="${(event) => this._onBoolean("force_dialog", event)}"
-              />
-              Forcer plus d'infos pour les domaines toggle
-            </label>
-
-            <label>
-              <input
-                type="checkbox"
-                .checked="${!!this.config.state_color}"
-                @change="${(event) => this._onBoolean("state_color", event)}"
-              />
-              Couleur d'état HA (state_color)
-            </label>
-
-            <label>
-              <input
-                type="checkbox"
-                .checked="${!!this.config.shadow}"
-                @change="${(event) => this._onBoolean("shadow", event)}"
-              />
-              Ombre sur les icônes
-            </label>
           </div>
         </details>
       </div>
@@ -3502,7 +3534,6 @@ class AlphaAreaCardEditor extends LitElement {
         color: var(--primary-text-color, #f9fafb);
       }
 
-      .entity-settings-grid,
       .entity-detail {
         display: grid;
         gap: 10px;
@@ -3522,6 +3553,12 @@ class AlphaAreaCardEditor extends LitElement {
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 8px;
         background: rgba(255, 255, 255, 0.025);
+      }
+
+      .subsection-title {
+        font-size: 0.78rem;
+        font-weight: 750;
+        color: var(--primary-text-color, #f9fafb);
       }
 
       .entities-header {

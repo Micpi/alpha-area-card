@@ -19,18 +19,17 @@ Combinez image, capteurs et commandes dans un composant lisible, mobile-first et
 
 - ajout Lovelace vierge: aucun salon/cuisine/exemple n'est injecte par defaut
 - prise en charge native des zones Home Assistant
-- editeur graphique integre avec sections `General`, `Entites`, `Actions`, `Apparence`, `Defaults`
+- editeur graphique integre avec sections `General`, `Entites` et `Apparence`
 - affichage optimise des capteurs, alertes, toggles et entites secondaires
 - options modernes de l'Area card: `display_type`, `camera_view`, `aspect_ratio`, `color`, `sensor_classes`, `alert_classes`, `features_position`
-- largeur full width par defaut et hauteur precise configurable avec `height`
+- largeur full width par defaut, hauteur precise configurable avec `height` et coins reglables avec `styles.border_radius`
 - icones d'entites resolues depuis la config, Home Assistant, le registre, puis le domaine/device_class
 - positionnement precis des entites: bas/haut gauche, centre, droite ou droite du titre
 - affichage par entite en bouton, texte ou icone seule, avec couleurs active/inactive
-- badge optionnel par entite avec texte, icone, position et couleurs propres
+- badge optionnel par entite avec source dediee, visibilite conditionnelle, compteur, texte, icone, position et couleurs propres
 - editeur plus fluide: un seul picker d'entite est rendu dans le sous-onglet de reglage actif
 - support `features: [{ type: area-controls }]` avec filtres `controls`
-- actions avances: `tap_action`, `hold_action`, `double_tap_action` pour la carte
-- actions par defaut pour les entites en `hold` et `double tap`
+- actions avancees configurees directement dans chaque entite: `tap_action`, `hold_action`, `double_tap_action`
 - filtres de domaines, tri et limitation du volume d'entites
 - rendu concis et rapide, avec rafraichissement limite aux changements utiles
 
@@ -83,6 +82,7 @@ color: primary
 styles:
   title_color: "#ffffff"
   title_effect: neon
+  border_radius: 22px
 entity_defaults:
   position: bottom-right
   display_mode: button
@@ -97,8 +97,14 @@ entities:
     icon_color_on: "#ffd166"
     icon_color_off: "#94a3b8"
     background_color_on: "rgba(255, 209, 102, 0.22)"
+    tap_action:
+      action: toggle
+    hold_action:
+      action: more-info
     badge: true
-    badge_text: "3"
+    badge_entity: light.groupe_lumieres_salon
+    badge_mode: count_on
+    badge_show_when: nonzero
     badge_position: top-right
     badge_color: "#111827"
     badge_background: "#ffd166"
@@ -120,8 +126,6 @@ features:
       - switch
       - entity_id: light.salon_lampe
 features_position: inline
-tap_action:
-  action: more-info
 ```
 
 ## 🧭 Options principales
@@ -133,16 +137,12 @@ tap_action:
 - camera_view: conserve la syntaxe HA (`auto` ou `live`); le rendu custom utilise le snapshot `camera_proxy`
 - aspect_ratio: ratio stable (`16:9`, `16x9`, `56.25%`, etc.)
 - height: hauteur fixe optionnelle (`220`, `220px`, `24rem`, `40vh`); si absente, le ratio reste utilise
+- styles.border_radius: arrondi de la carte (`0`, `12px`, `1rem`, etc.)
 - color: token Home Assistant ou couleur hex pour l'accent
 - auto_area_entities: auto-remplissage depuis la zone quand la liste d'entites est vide
 - entities: entites secondaires affichees dans la carte
 - entity_defaults: valeurs par defaut appliquees aux entites (`position`, `display_mode`, `show_name`, `show_state`, couleurs)
 - hide_unavailable: masque les entites indisponibles
-- tap_action: action principale au clic
-- hold_action: action carte au clic droit / hold
-- double_tap_action: action carte au double-clic / double tap
-- entity_hold_action: action par defaut des entites au clic droit / hold
-- entity_double_tap_action: action par defaut des entites au double-clic / double tap
 - include_domains: liste de domaines a inclure (ex: light,switch)
 - exclude_domains: liste de domaines a exclure (ex: sensor,binary_sensor)
 - exclude_entities: entites a exclure des capteurs, alertes et controles
@@ -159,6 +159,8 @@ tap_action:
 - state_color: applique les couleurs d'etat Home Assistant
 - card_mod.style: surcharge CSS si card-mod est utilise
 
+Les actions de carte globales restent compatibles en YAML (`tap_action`, `hold_action`, `double_tap_action`), mais l'editeur graphique privilegie les actions configurees dans chaque entite.
+
 ## 🎛️ Personnalisation des entites
 
 Chaque entree de `entities` peut rester une chaine simple ou devenir un objet detaille.
@@ -172,16 +174,23 @@ Chaque entree de `entities` peut rester une chaine simple ou devenir un objet de
 - icon_color_on / icon_color_off: couleur de l'icone active/inactive
 - text_color_on / text_color_off: couleur du texte actif/inactif
 - background_color_on / background_color_off: fond du bouton actif/inactif
+- tap_action / hold_action / double_tap_action: actions propres a cette entite
 - badge: `true` pour afficher un badge personnalise, `false` pour couper le badge auto
+- badge_entity: entite source du badge; vide, la carte utilise l'entite du bouton
+- badge_mode: `auto`, `state`, `count_on` ou `text`
+- badge_show_when: `auto`, `always`, `active`, `on`, `nonzero` ou `state`
+- badge_state: etat attendu quand `badge_show_when: state`
 - badge_text / badge_icon: contenu du badge
 - badge_position: `top-right`, `top-left`, `bottom-right`, `bottom-left`
 - badge_color / badge_background / badge_border_color: couleurs du badge
+
+Pour un groupe de lumieres, utilisez par exemple `badge_entity: light.groupe_lumieres`, `badge_mode: count_on` et `badge_show_when: nonzero` pour afficher uniquement le nombre de lumieres allumees.
 
 Les positions automatiques restent compatibles: capteurs en haut gauche, medias en bas gauche, toggles et entites secondaires en bas droite, alertes ou feature inline a droite du titre.
 
 ## 🛠️ Editeur graphique
 
-La carte expose un editeur natif dans le picker Lovelace. Elle peut donc etre ajoutee depuis l'interface sans passer par YAML, puis affinee manuellement si besoin.
+La carte expose un editeur natif dans le picker Lovelace. La section `Apparence` gere uniquement le rendu de la carte: taille, ratio, image/camera, arrondi, flou et titre. La section `Entites` contient la liste et le reglage detaille de chaque entite, avec position, couleurs, actions et badge.
 
 ## 🧱 Build local
 
