@@ -36,6 +36,8 @@ const ENTITY_POSITIONS = [
   "title-right",
 ]
 const ENTITY_DISPLAY_MODES = ["button", "text", "icon"]
+const ENTITY_BADGE_POSITIONS = ["top-right", "top-left", "bottom-right", "bottom-left"]
+const TITLE_EFFECTS = ["none", "shadow", "neon", "outline"]
 const DEFAULT_SENSOR_CLASSES = ["temperature", "humidity"]
 const DEFAULT_ALERT_CLASSES = ["moisture", "motion"]
 const SUM_SENSOR_CLASSES = new Set(["energy", "gas", "monetary", "power", "volume", "water"])
@@ -184,9 +186,10 @@ const STYLE_DEFAULTS = {
   button_light_color_on: "var(--state-light-active-color, var(--primary-color, #00AEEF))",
   badge_background: "var(--primary-color, #00AEEF)",
   title_color: "var(--primary-text-color, #f8fafc)",
+  title_effect: "shadow",
   title_font_weight: "600",
   title_text_transform: "none",
-  title_text_shadow: "0 1px 3px rgba(0, 0, 0, 0.55)",
+  title_text_shadow: "",
   image_blur: "0px",
 }
 
@@ -328,6 +331,12 @@ const normalizeEntityPosition = (value, fallback = "bottom-right") =>
 
 const normalizeEntityDisplayMode = (value, fallback = "button") =>
   ENTITY_DISPLAY_MODES.includes(value) ? value : fallback
+
+const normalizeEntityBadgePosition = (value, fallback = "top-right") =>
+  ENTITY_BADGE_POSITIONS.includes(value) ? value : fallback
+
+const normalizeTitleEffect = (value, fallback = "shadow") =>
+  TITLE_EFFECTS.includes(value) ? value : fallback
 
 const isEntityActive = (entityState) => {
   if (!entityState || INACTIVE_STATES.has(entityState.state)) {
@@ -730,6 +739,7 @@ class AlphaAreaCard extends HTMLElement {
     merged.features = Array.isArray(merged.features) ? merged.features.filter(Boolean) : []
     merged.camera_entity = safeText(merged.camera_entity || merged.camera_image)
     merged.height = normalizeCssSize(merged.height)
+    merged.styles.title_effect = normalizeTitleEffect(merged.styles.title_effect, "shadow")
     merged.entity_defaults.position = normalizeEntityPosition(merged.entity_defaults.position, "")
     merged.entity_defaults.display_mode = normalizeEntityDisplayMode(
       merged.entity_defaults.display_mode,
@@ -1493,8 +1503,8 @@ class AlphaAreaCard extends HTMLElement {
       entityConfig
     )
     const title = displayState ? `${name}: ${displayState}` : name
-    const labelText = presentation.text || (presentation.showName || displayMode === "text" ? name : "")
     const displayMode = presentation.displayMode
+    const labelText = presentation.text || (presentation.showName || displayMode === "text" ? name : "")
     const buttonStyle = this._getEntityButtonStyle(presentation)
 
     const stateColorAttr = shouldUseStateColor(entityConfig, this.config)
@@ -1504,9 +1514,7 @@ class AlphaAreaCard extends HTMLElement {
       ? `<span class=\"sensor-value\">${escapeHtml(displayState)}</span>`
       : ""
 
-    const badgeHtml = entityConfig.entity.startsWith("light.")
-      ? this._renderLightBadge(entityConfig.entity)
-      : ""
+    const badgeHtml = this._renderEntityBadge(entityConfig, displayState)
 
     return `
       <button class=\"entity entity--${displayMode} ${asSensorLine ? "sensor" : "action"} ${entityConfig.alert ? "alert" : ""} ${isOn ? "is-on" : ""}\" data-entity-id=\"${escapeAttribute(entityConfig.entity)}\" title=\"${escapeAttribute(title)}\" style=\"${escapeAttribute(buttonStyle)}\"${stateColorAttr}>
@@ -1518,7 +1526,7 @@ class AlphaAreaCard extends HTMLElement {
     `
   }
 
-  _renderLightBadge(entityId) {
+  _getLightBadgeText(entityId) {
     const state = this._hass?.states?.[entityId]
     const members = state?.attributes?.entity_id
     if (!Array.isArray(members) || members.length === 0) {
@@ -1533,7 +1541,82 @@ class AlphaAreaCard extends HTMLElement {
       return ""
     }
 
-    return `<span class=\"entity-badge\">${escapeHtml(activeCount)}</span>`
+    return safeText(activeCount)
+  }
+
+  _getEntityBadgeConfig(entityConfig, displayState) {
+    const rawBadge = entityConfig.badge
+    if (rawBadge === false || rawBadge?.enabled === false) {
+      return null
+    }
+
+    const nested = rawBadge && typeof rawBadge === "object" ? rawBadge : {}
+    const hasCustomBadge =
+      rawBadge === true ||
+      Object.keys(nested).length > 0 ||
+      [
+        "badge_text",
+        "badge_icon",
+        "badge_color",
+        "badge_background",
+        "badge_border_color",
+        "badge_position",
+      ].some((key) => entityConfig[key] !== undefined && entityConfig[key] !== "")
+
+    const automaticText = entityConfig.entity.startsWith("light.")
+      ? this._getLightBadgeText(entityConfig.entity)
+      : ""
+
+    if (!hasCustomBadge && !automaticText) {
+      return null
+    }
+
+    const text =
+      safeText(nested.text || entityConfig.badge_text || automaticText || (rawBadge === true ? displayState : ""))
+    const icon = safeText(nested.icon || entityConfig.badge_icon)
+
+    if (!text && !icon) {
+      return null
+    }
+
+    const vars = {
+      "--mac-entity-badge-color": resolveColorToken(
+        nested.color || entityConfig.badge_color || "var(--mac-badge-text-color)"
+      ),
+      "--mac-entity-badge-background": resolveColorToken(
+        nested.background ||
+          entityConfig.badge_background ||
+          entityConfig.badge_color_on ||
+          "var(--mac-badge-background)"
+      ),
+      "--mac-entity-badge-border-color": resolveColorToken(
+        nested.border_color || entityConfig.badge_border_color || "rgba(255, 255, 255, 0.28)"
+      ),
+    }
+
+    return {
+      text,
+      icon,
+      position: normalizeEntityBadgePosition(nested.position || entityConfig.badge_position),
+      style: Object.entries(vars)
+        .filter(([, value]) => value !== undefined && value !== null && value !== "")
+        .map(([name, value]) => `${name}: ${value};`)
+        .join(" "),
+    }
+  }
+
+  _renderEntityBadge(entityConfig, displayState) {
+    const badge = this._getEntityBadgeConfig(entityConfig, displayState)
+    if (!badge) {
+      return ""
+    }
+
+    return `
+      <span class=\"entity-badge badge-${badge.position}\" style=\"${escapeAttribute(badge.style)}\">
+        ${badge.icon ? `<ha-icon class=\"entity-badge-icon\" icon=\"${escapeAttribute(badge.icon)}\"></ha-icon>` : ""}
+        ${badge.text ? `<span>${escapeHtml(badge.text)}</span>` : ""}
+      </span>
+    `
   }
 
   _computeCardCssVariables() {
@@ -1546,6 +1629,7 @@ class AlphaAreaCard extends HTMLElement {
       "--mac-button-light-color-on": styles.button_light_color_on,
       "--mac-badge-background": styles.badge_background,
       "--mac-title-color": styles.title_color,
+      "--mac-title-effect": styles.title_effect,
       "--mac-title-font-weight": styles.title_font_weight,
       "--mac-title-text-transform": styles.title_text_transform,
       "--mac-title-text-shadow": styles.title_text_shadow,
@@ -1556,6 +1640,24 @@ class AlphaAreaCard extends HTMLElement {
       .filter(([, value]) => value !== undefined && value !== null && value !== "")
       .map(([name, value]) => `${name}: ${value};`)
       .join(" ")
+  }
+
+  _getTitleTextShadow(styles) {
+    const customShadow = safeText(styles.title_text_shadow).trim()
+    if (customShadow) {
+      return customShadow
+    }
+
+    switch (normalizeTitleEffect(styles.title_effect, "shadow")) {
+      case "neon":
+        return "0 0 5px var(--mac-title-color), 0 0 18px var(--mac-accent-color)"
+      case "outline":
+        return "0 1px 0 rgba(0, 0, 0, 0.75), 1px 0 0 rgba(0, 0, 0, 0.75), -1px 0 0 rgba(0, 0, 0, 0.75), 0 -1px 0 rgba(0, 0, 0, 0.75)"
+      case "shadow":
+        return "0 1px 3px rgba(0, 0, 0, 0.55)"
+      default:
+        return "none"
+    }
   }
 
   _render() {
@@ -1638,10 +1740,11 @@ class AlphaAreaCard extends HTMLElement {
     this._lastStateSnapshot = stateSnapshot
 
     const cardStyle = this._computeCardCssVariables()
+    const titleTextShadow = this._getTitleTextShadow(styles)
     const titleStyle = `
       ${styles.title_font_weight ? `font-weight:${styles.title_font_weight};` : ""}
       ${styles.title_text_transform ? `text-transform:${styles.title_text_transform};` : ""}
-      ${styles.title_text_shadow ? `text-shadow:${styles.title_text_shadow};` : ""}
+      text-shadow:${titleTextShadow};
     `
 
     this.shadowRoot.innerHTML = `
@@ -1667,7 +1770,7 @@ class AlphaAreaCard extends HTMLElement {
 
         ha-card {
           position: relative;
-          overflow: hidden;
+          overflow: visible;
           width: 100%;
           box-sizing: border-box;
           border-radius: var(--ha-card-border-radius, 16px);
@@ -1704,6 +1807,8 @@ class AlphaAreaCard extends HTMLElement {
           inset: 0;
           z-index: 0;
           pointer-events: none;
+          overflow: hidden;
+          border-radius: inherit;
         }
 
         .bg img {
@@ -1763,7 +1868,7 @@ class AlphaAreaCard extends HTMLElement {
 
         .entity-zones {
           display: grid;
-          grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+          grid-template-columns: repeat(3, minmax(0, 1fr));
           gap: 8px;
           min-width: 0;
           min-height: 0;
@@ -1833,6 +1938,7 @@ class AlphaAreaCard extends HTMLElement {
           gap: 6px;
           min-width: 0;
           max-width: 100%;
+          overflow: visible;
           cursor: pointer;
           padding: 6px 8px;
           transition: background 150ms ease, transform 150ms ease, color 150ms ease;
@@ -1931,20 +2037,53 @@ class AlphaAreaCard extends HTMLElement {
 
         .entity-badge {
           position: absolute;
-          top: -4px;
-          right: -4px;
+          top: auto;
+          right: auto;
+          bottom: auto;
+          left: auto;
           min-width: 16px;
           height: 16px;
           border-radius: 8px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
+          gap: 2px;
           font-size: 10px;
           font-weight: 700;
           padding: 0 4px;
-          background: var(--mac-badge-background);
-          color: var(--mac-badge-text-color);
+          background: var(--mac-entity-badge-background, var(--mac-badge-background));
+          color: var(--mac-entity-badge-color, var(--mac-badge-text-color));
+          border: 1px solid var(--mac-entity-badge-border-color, rgba(255, 255, 255, 0.28));
           box-shadow: 0 1px 4px rgba(0, 0, 0, 0.36);
+          pointer-events: none;
+          line-height: 1;
+          white-space: nowrap;
+        }
+
+        .badge-top-right {
+          top: -5px;
+          right: -5px;
+        }
+
+        .badge-top-left {
+          top: -5px;
+          left: -5px;
+        }
+
+        .badge-bottom-right {
+          right: -5px;
+          bottom: -5px;
+        }
+
+        .badge-bottom-left {
+          left: -5px;
+          bottom: -5px;
+        }
+
+        .entity-badge-icon {
+          width: 11px;
+          height: 11px;
+          --mdc-icon-size: 11px;
         }
 
         @media (max-width: 600px) {
@@ -2064,6 +2203,7 @@ class AlphaAreaCardEditor extends LitElement {
       "bottom"
     )
     this.config.height = normalizeCssSize(this.config.height)
+    this.config.styles.title_effect = normalizeTitleEffect(this.config.styles.title_effect, "shadow")
     this.config.entity_defaults.position = normalizeEntityPosition(
       this.config.entity_defaults.position,
       ""
@@ -2401,11 +2541,11 @@ class AlphaAreaCardEditor extends LitElement {
             class="color-input"
             type="color"
             .value="${hexValue}"
-            @input="${(event) => this._setValue(path, event.target.value)}"
+            @change="${(event) => this._setValue(path, event.target.value)}"
           />
           <input
             .value="${value}"
-            @input="${(event) => this._onInput(path, event)}"
+            @change="${(event) => this._onInput(path, event)}"
             placeholder="${fallback}"
           />
         </div>
@@ -2518,6 +2658,56 @@ class AlphaAreaCardEditor extends LitElement {
     this._setEntityOption(index, key, event.target.checked)
   }
 
+  _isEntityBadgeEnabled(entityConfig = {}) {
+    if (entityConfig.badge === false || entityConfig.badge?.enabled === false) {
+      return false
+    }
+    return Boolean(
+      entityConfig.badge === true ||
+        (entityConfig.badge && typeof entityConfig.badge === "object") ||
+        entityConfig.badge_text ||
+        entityConfig.badge_icon ||
+        entityConfig.badge_color ||
+        entityConfig.badge_background ||
+        entityConfig.badge_border_color ||
+        entityConfig.badge_position
+    )
+  }
+
+  _setEntityBadgeEnabled(index, enabled) {
+    this._updateEntityItem(index, (entityConfig) => {
+      if (enabled) {
+        entityConfig.badge = true
+        return
+      }
+
+      entityConfig.badge = false
+      delete entityConfig.badge_text
+      delete entityConfig.badge_icon
+      delete entityConfig.badge_color
+      delete entityConfig.badge_background
+      delete entityConfig.badge_border_color
+      delete entityConfig.badge_position
+    })
+  }
+
+  _renderBadgePositionSelect(value, onChange) {
+    const labels = {
+      "top-right": "Haut droite",
+      "top-left": "Haut gauche",
+      "bottom-right": "Bas droite",
+      "bottom-left": "Bas gauche",
+    }
+
+    return html`
+      <select .value="${value || "top-right"}" @change="${onChange}">
+        ${ENTITY_BADGE_POSITIONS.map(
+          (position) => html`<option value="${position}">${labels[position]}</option>`
+        )}
+      </select>
+    `
+  }
+
   _renderPositionSelect(value, onChange, includeAuto = true) {
     const labels = {
       "bottom-left": "Bas gauche",
@@ -2570,11 +2760,11 @@ class AlphaAreaCardEditor extends LitElement {
             class="color-input"
             type="color"
             .value="${hexValue}"
-            @input="${(event) => this._setEntityOption(index, key, event.target.value)}"
+            @change="${(event) => this._setEntityOption(index, key, event.target.value)}"
           />
           <input
             .value="${value}"
-            @input="${(event) => this._onEntityInput(index, key, event)}"
+            @change="${(event) => this._onEntityInput(index, key, event)}"
             placeholder="${fallback}"
           />
         </div>
@@ -2589,7 +2779,7 @@ class AlphaAreaCardEditor extends LitElement {
       <div class="entities-field">
         <div class="entities-header">
           <label>Entités</label>
-          <button class="add-button" @click="${() => this._addEntity()}" title="Ajouter une entité">
+          <button class="add-button" @click="${() => this._addEntity()}" title="Ajouter une entité" type="button">
             + Ajouter
           </button>
         </div>
@@ -2607,17 +2797,21 @@ class AlphaAreaCardEditor extends LitElement {
                 )
                 return html`
                   <div class="entity-row">
-                    <ha-entity-picker
-                      .hass="${this.hass}"
-                      .value="${entityId}"
-                      allow-custom-entity
-                      @value-changed="${(event) => this._setEntity(index, event.detail.value)}"
-                    ></ha-entity-picker>
+                    <button
+                      class="entity-row-main"
+                      @click="${() => this._selectEntity(index)}"
+                      title="Configurer cette entité"
+                      type="button"
+                    >
+                      <span>${entityId || `Entité ${index + 1}`}</span>
+                      ${isAdvanced ? html`<small>personnalisée</small>` : ""}
+                    </button>
                     <div class="entity-actions">
                       <button
                         class="move-button"
                         @click="${() => this._selectEntity(index)}"
                         title="Configurer"
+                        type="button"
                       >
                         ⚙
                       </button>
@@ -2626,6 +2820,7 @@ class AlphaAreaCardEditor extends LitElement {
                         @click="${() => this._moveEntity(index, "up")}"
                         ?disabled="${index === 0}"
                         title="Monter"
+                        type="button"
                       >
                         ↑
                       </button>
@@ -2634,6 +2829,7 @@ class AlphaAreaCardEditor extends LitElement {
                         @click="${() => this._moveEntity(index, "down")}"
                         ?disabled="${index === entities.length - 1}"
                         title="Descendre"
+                        type="button"
                       >
                         ↓
                       </button>
@@ -2642,6 +2838,7 @@ class AlphaAreaCardEditor extends LitElement {
                       class="remove-button"
                       @click="${() => this._removeEntity(index)}"
                       title="Retirer cette entité"
+                      type="button"
                     >
                       ✕
                     </button>
@@ -2714,6 +2911,8 @@ class AlphaAreaCardEditor extends LitElement {
       return html`<div class="empty-state">Ajoutez une entité pour ouvrir ses réglages.</div>`
     }
 
+    const badgeEnabled = this._isEntityBadgeEnabled(parsed)
+
     return html`
       <div class="entity-detail">
         <label>Entité à configurer</label>
@@ -2753,14 +2952,14 @@ class AlphaAreaCardEditor extends LitElement {
         <input
           .value="${parsed.text || ""}"
           placeholder="Lumière, TV, Ventilateur..."
-          @input="${(event) => this._onEntityInput(index, "text", event)}"
+          @change="${(event) => this._onEntityInput(index, "text", event)}"
         />
 
         <label>Nom affiché</label>
         <input
           .value="${parsed.name || ""}"
           placeholder="Nom personnalisé"
-          @input="${(event) => this._onEntityInput(index, "name", event)}"
+          @change="${(event) => this._onEntityInput(index, "name", event)}"
         />
 
         <label>
@@ -2785,21 +2984,21 @@ class AlphaAreaCardEditor extends LitElement {
         <input
           .value="${parsed.icon || ""}"
           placeholder="mdi:lightbulb"
-          @input="${(event) => this._onEntityInput(index, "icon", event)}"
+          @change="${(event) => this._onEntityInput(index, "icon", event)}"
         />
 
         <label>Icône active</label>
         <input
           .value="${parsed.icon_on || ""}"
           placeholder="mdi:lightbulb-on"
-          @input="${(event) => this._onEntityInput(index, "icon_on", event)}"
+          @change="${(event) => this._onEntityInput(index, "icon_on", event)}"
         />
 
         <label>Icône inactive</label>
         <input
           .value="${parsed.icon_off || ""}"
           placeholder="mdi:lightbulb-outline"
-          @input="${(event) => this._onEntityInput(index, "icon_off", event)}"
+          @change="${(event) => this._onEntityInput(index, "icon_off", event)}"
         />
 
         <div class="entity-detail-columns">
@@ -2809,6 +3008,46 @@ class AlphaAreaCardEditor extends LitElement {
           ${this._renderEntityColorField("Couleur texte inactive", index, "text_color_off", "#CBD5E1")}
           ${this._renderEntityColorField("Fond bouton actif", index, "background_color_on", "#164E63")}
           ${this._renderEntityColorField("Fond bouton inactif", index, "background_color_off", "#111827")}
+        </div>
+
+        <div class="entity-subsection">
+          <label>
+            <input
+              type="checkbox"
+              .checked="${badgeEnabled}"
+              @change="${(event) => this._setEntityBadgeEnabled(index, event.target.checked)}"
+            />
+            Badge sur cette entité
+          </label>
+
+          ${badgeEnabled
+            ? html`
+                <label>Texte badge</label>
+                <input
+                  .value="${parsed.badge_text || ""}"
+                  placeholder="1, ON, TV..."
+                  @change="${(event) => this._onEntityInput(index, "badge_text", event)}"
+                />
+
+                <label>Icône badge</label>
+                <input
+                  .value="${parsed.badge_icon || ""}"
+                  placeholder="mdi:check"
+                  @change="${(event) => this._onEntityInput(index, "badge_icon", event)}"
+                />
+
+                <label>Position badge</label>
+                ${this._renderBadgePositionSelect(parsed.badge_position || "top-right", (event) =>
+                  this._setEntityOption(index, "badge_position", event.target.value)
+                )}
+
+                <div class="entity-detail-columns">
+                  ${this._renderEntityColorField("Couleur badge", index, "badge_color", "#FFFFFF")}
+                  ${this._renderEntityColorField("Fond badge", index, "badge_background", "#03A9F4")}
+                  ${this._renderEntityColorField("Bordure badge", index, "badge_border_color", "#FFFFFF")}
+                </div>
+              `
+            : ""}
         </div>
       </div>
     `
@@ -2877,51 +3116,6 @@ class AlphaAreaCardEditor extends LitElement {
               )}
             </select>
 
-            <label>Mode d'affichage</label>
-            <select
-              .value="${this.config.display_type || "picture"}"
-              @change="${(event) => this._setValue("display_type", event.target.value)}"
-            >
-              <option value="picture">picture</option>
-              <option value="camera">camera</option>
-              <option value="icon">icon</option>
-              <option value="compact">compact</option>
-            </select>
-
-            <label>Hauteur fixe de la carte</label>
-            <input
-              .value="${this.config.height || ""}"
-              placeholder="180px, 22rem, 40vh"
-              @change="${(event) => this._onCssSize("height", event)}"
-            />
-
-            ${this.config.display_type === "camera"
-              ? html`
-                  <label>Caméra</label>
-                  <ha-entity-picker
-                    .hass="${this.hass}"
-                    .value="${this.config.camera_entity || ""}"
-                    allow-custom-entity
-                    @value-changed="${(event) =>
-                      this._setValue("camera_entity", event.detail.value || "")}"
-                  ></ha-entity-picker>
-                `
-              : ""}
-
-            <label>Ratio image</label>
-            <input
-              .value="${this.config.aspect_ratio || ""}"
-              placeholder="16:9"
-              @input="${(event) => this._onInput("aspect_ratio", event)}"
-            />
-
-            <label>Couleur HA (token ou hex)</label>
-            <input
-              .value="${this.config.color || ""}"
-              placeholder="primary, blue, #00AEEF"
-              @input="${(event) => this._onInput("color", event)}"
-            />
-
             <label>
               <input
                 type="checkbox"
@@ -2931,17 +3125,6 @@ class AlphaAreaCardEditor extends LitElement {
               Auto-remplir les entités depuis la zone si la liste est vide
             </label>
 
-            ${this.config.display_type !== "camera"
-              ? html`
-                  <label>Image de fond (URL ou /local/...)</label>
-                  <input
-                    .value="${this.config.image || ""}"
-                    placeholder="/local/images/zone.jpg"
-                    @input="${(event) => this._onInput("image", event)}"
-                  />
-                `
-              : ""}
-
             <label>
               <input
                 type="checkbox"
@@ -2949,15 +3132,6 @@ class AlphaAreaCardEditor extends LitElement {
                 @change="${(event) => this._onBoolean("hide_unavailable", event)}"
               />
               Masquer les entités indisponibles
-            </label>
-
-            <label>
-              <input
-                type="checkbox"
-                .checked="${!!this.config.darken_image}"
-                @change="${(event) => this._onBoolean("darken_image", event)}"
-              />
-              Assombrir l'image de fond
             </label>
           </div>
         </details>
@@ -2989,19 +3163,88 @@ class AlphaAreaCardEditor extends LitElement {
         <details>
           <summary>Apparence</summary>
           <div class="section-content">
-            ${this._renderColorField("Couleur texte badge", "styles.badge_text_color", "#0667c1")}
-            ${this._renderColorField("Fond badge", "styles.badge_background", "#e8f359")}
+            <label>Mode d'affichage</label>
+            <select
+              .value="${this.config.display_type || "picture"}"
+              @change="${(event) => this._setValue("display_type", event.target.value)}"
+            >
+              <option value="picture">picture</option>
+              <option value="camera">camera</option>
+              <option value="icon">icon</option>
+              <option value="compact">compact</option>
+            </select>
+
+            <label>Hauteur fixe de la carte</label>
+            <input
+              .value="${this.config.height || ""}"
+              placeholder="180px, 22rem, 40vh"
+              @change="${(event) => this._onCssSize("height", event)}"
+            />
+
+            <label>Ratio image</label>
+            <input
+              .value="${this.config.aspect_ratio || ""}"
+              placeholder="16:9"
+              @change="${(event) => this._onInput("aspect_ratio", event)}"
+            />
+
+            ${this.config.display_type === "camera"
+              ? html`
+                  <label>Caméra</label>
+                  <ha-entity-picker
+                    .hass="${this.hass}"
+                    .value="${this.config.camera_entity || ""}"
+                    allow-custom-entity
+                    @value-changed="${(event) =>
+                      this._setValue("camera_entity", event.detail.value || "")}"
+                  ></ha-entity-picker>
+                `
+              : html`
+                  <label>Image de fond (URL ou /local/...)</label>
+                  <input
+                    .value="${this.config.image || ""}"
+                    placeholder="/local/images/zone.jpg"
+                    @change="${(event) => this._onInput("image", event)}"
+                  />
+                `}
+
+            <label>Couleur d'accent HA (token ou hex)</label>
+            <input
+              .value="${this.config.color || ""}"
+              placeholder="primary, blue, #00AEEF"
+              @change="${(event) => this._onInput("color", event)}"
+            />
+
+            <label>
+              <input
+                type="checkbox"
+                .checked="${!!this.config.darken_image}"
+                @change="${(event) => this._onBoolean("darken_image", event)}"
+              />
+              Assombrir l'image de fond
+            </label>
 
             <label>Poids du titre (font-weight)</label>
             <input
               .value="${this.config.styles?.title_font_weight || ""}"
               placeholder="300"
-              @input="${(event) => this._onInput("styles.title_font_weight", event)}"
+              @change="${(event) => this._onInput("styles.title_font_weight", event)}"
             />
+
+            <label>Effet du titre</label>
+            <select
+              .value="${this.config.styles?.title_effect || "shadow"}"
+              @change="${(event) => this._setValue("styles.title_effect", event.target.value)}"
+            >
+              <option value="none">none</option>
+              <option value="shadow">shadow</option>
+              <option value="neon">neon</option>
+              <option value="outline">outline</option>
+            </select>
 
             <label>Transformation du titre (text-transform)</label>
             <select
-              .value="${this.config.styles?.title_text_transform || "capitalize"}"
+              .value="${this.config.styles?.title_text_transform || "none"}"
               @change="${(event) =>
                 this._setValue("styles.title_text_transform", event.target.value)}"
             >
@@ -3011,18 +3254,18 @@ class AlphaAreaCardEditor extends LitElement {
               <option value="none">none</option>
             </select>
 
-            <label>Ombre du titre (text-shadow)</label>
+            <label>Ombre CSS du titre (avance)</label>
             <input
               .value="${this.config.styles?.title_text_shadow || ""}"
-              placeholder="2px 2px 1px black"
-              @input="${(event) => this._onInput("styles.title_text_shadow", event)}"
+              placeholder="0 0 8px #00AEEF"
+              @change="${(event) => this._onInput("styles.title_text_shadow", event)}"
             />
 
             <label>Flou image (blur)</label>
             <input
               .value="${this.config.styles?.image_blur || ""}"
               placeholder="2px"
-              @input="${(event) => this._onInput("styles.image_blur", event)}"
+              @change="${(event) => this._onInput("styles.image_blur", event)}"
             />
           </div>
         </details>
@@ -3271,6 +3514,16 @@ class AlphaAreaCardEditor extends LitElement {
         gap: 10px;
       }
 
+      .entity-subsection {
+        display: grid;
+        gap: 10px;
+        margin-top: 4px;
+        padding: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.025);
+      }
+
       .entities-header {
         display: flex;
         justify-content: space-between;
@@ -3321,6 +3574,32 @@ class AlphaAreaCardEditor extends LitElement {
         border: 1px solid rgba(255, 255, 255, 0.08);
         border-radius: 8px;
         padding: 8px;
+      }
+
+      .entity-row-main {
+        display: grid;
+        gap: 2px;
+        min-width: 0;
+        border: 0;
+        background: transparent;
+        color: var(--primary-text-color, #f9fafb);
+        text-align: left;
+        padding: 0;
+        cursor: pointer;
+      }
+
+      .entity-row-main span {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 0.86rem;
+        font-weight: 650;
+      }
+
+      .entity-row-main small {
+        color: var(--secondary-text-color, #9ca3af);
+        font-size: 0.72rem;
       }
 
       .entity-actions {

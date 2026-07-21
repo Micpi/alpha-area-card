@@ -26,6 +26,8 @@ Combinez image, capteurs et commandes dans un composant lisible, mobile-first et
 - icones d'entites resolues depuis la config, Home Assistant, le registre, puis le domaine/device_class
 - positionnement precis des entites: bas/haut gauche, centre, droite ou droite du titre
 - affichage par entite en bouton, texte ou icone seule, avec couleurs active/inactive
+- badge optionnel par entite avec texte, icone, position et couleurs propres
+- editeur plus fluide: un seul picker d'entite est rendu dans le sous-onglet de reglage actif
 - support `features: [{ type: area-controls }]` avec filtres `controls`
 - actions avances: `tap_action`, `hold_action`, `double_tap_action` pour la carte
 - actions par defaut pour les entites en `hold` et `double tap`
@@ -80,6 +82,7 @@ height: 220px
 color: primary
 styles:
   title_color: "#ffffff"
+  title_effect: neon
 entity_defaults:
   position: bottom-right
   display_mode: button
@@ -94,6 +97,11 @@ entities:
     icon_color_on: "#ffd166"
     icon_color_off: "#94a3b8"
     background_color_on: "rgba(255, 209, 102, 0.22)"
+    badge: true
+    badge_text: "3"
+    badge_position: top-right
+    badge_color: "#111827"
+    badge_background: "#ffd166"
   - entity: sensor.salon_temperature
     position: top-left
     display_mode: text
@@ -164,6 +172,10 @@ Chaque entree de `entities` peut rester une chaine simple ou devenir un objet de
 - icon_color_on / icon_color_off: couleur de l'icone active/inactive
 - text_color_on / text_color_off: couleur du texte actif/inactif
 - background_color_on / background_color_off: fond du bouton actif/inactif
+- badge: `true` pour afficher un badge personnalise, `false` pour couper le badge auto
+- badge_text / badge_icon: contenu du badge
+- badge_position: `top-right`, `top-left`, `bottom-right`, `bottom-left`
+- badge_color / badge_background / badge_border_color: couleurs du badge
 
 Les positions automatiques restent compatibles: capteurs en haut gauche, medias en bas gauche, toggles et entites secondaires en bas droite, alertes ou feature inline a droite du titre.
 
