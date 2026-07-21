@@ -26,10 +26,30 @@ const ACTION_OPTIONS = [
 
 const DISPLAY_TYPES = ["compact", "icon", "picture", "camera"]
 const FEATURE_POSITIONS = ["bottom", "inline"]
+const ENTITY_POSITIONS = [
+  "bottom-left",
+  "bottom-center",
+  "bottom-right",
+  "top-left",
+  "top-center",
+  "top-right",
+  "title-right",
+]
+const ENTITY_DISPLAY_MODES = ["button", "text", "icon"]
 const DEFAULT_SENSOR_CLASSES = ["temperature", "humidity"]
 const DEFAULT_ALERT_CLASSES = ["moisture", "motion"]
 const SUM_SENSOR_CLASSES = new Set(["energy", "gas", "monetary", "power", "volume", "water"])
 const AREA_CONTROL_FEATURE_TYPES = new Set(["area-controls", "area_controls"])
+const INACTIVE_STATES = new Set([
+  "off",
+  "closed",
+  "locked",
+  "idle",
+  "standby",
+  "paused",
+  "unavailable",
+  "unknown",
+])
 const COLOR_TOKENS = {
   primary: "var(--primary-color, #03A9F4)",
   accent: "var(--accent-color, var(--primary-color, #03A9F4))",
@@ -163,10 +183,28 @@ const STYLE_DEFAULTS = {
   badge_text_color: "var(--text-primary-color, #FFFFFF)",
   button_light_color_on: "var(--state-light-active-color, var(--primary-color, #00AEEF))",
   badge_background: "var(--primary-color, #00AEEF)",
+  title_color: "var(--primary-text-color, #f8fafc)",
   title_font_weight: "600",
   title_text_transform: "none",
   title_text_shadow: "0 1px 3px rgba(0, 0, 0, 0.55)",
   image_blur: "0px",
+}
+
+const ENTITY_DEFAULTS = {
+  position: "",
+  display_mode: "button",
+  show_name: false,
+  show_state: false,
+  icon: "",
+  icon_on: "",
+  icon_off: "",
+  text: "",
+  icon_color_on: "",
+  icon_color_off: "",
+  text_color_on: "",
+  text_color_off: "",
+  background_color_on: "",
+  background_color_off: "",
 }
 
 const DEFAULT_CONFIG = {
@@ -205,6 +243,7 @@ const DEFAULT_CONFIG = {
     action: "none",
   },
   entities: [],
+  entity_defaults: { ...ENTITY_DEFAULTS },
   styles: { ...STYLE_DEFAULTS },
   darken_image: true,
   shadow: false,
@@ -283,6 +322,19 @@ const normalizeOptionalStringList = (value, lowerCase = false) => {
 
 const normalizeSelect = (value, allowed, fallback) =>
   allowed.includes(value) ? value : fallback
+
+const normalizeEntityPosition = (value, fallback = "bottom-right") =>
+  ENTITY_POSITIONS.includes(value) ? value : fallback
+
+const normalizeEntityDisplayMode = (value, fallback = "button") =>
+  ENTITY_DISPLAY_MODES.includes(value) ? value : fallback
+
+const isEntityActive = (entityState) => {
+  if (!entityState || INACTIVE_STATES.has(entityState.state)) {
+    return false
+  }
+  return Boolean(entityState.state)
+}
 
 const resolveColorToken = (value, fallback = "") => {
   const color = safeText(value || fallback).trim()
@@ -644,6 +696,10 @@ class AlphaAreaCard extends HTMLElement {
         ...deepClone(DEFAULT_CONFIG.entity_double_tap_action),
         ...(config?.entity_double_tap_action || {}),
       },
+      entity_defaults: {
+        ...deepClone(DEFAULT_CONFIG.entity_defaults),
+        ...(config?.entity_defaults || {}),
+      },
     }
 
     if (merged.entities && !Array.isArray(merged.entities)) {
@@ -674,6 +730,11 @@ class AlphaAreaCard extends HTMLElement {
     merged.features = Array.isArray(merged.features) ? merged.features.filter(Boolean) : []
     merged.camera_entity = safeText(merged.camera_entity || merged.camera_image)
     merged.height = normalizeCssSize(merged.height)
+    merged.entity_defaults.position = normalizeEntityPosition(merged.entity_defaults.position, "")
+    merged.entity_defaults.display_mode = normalizeEntityDisplayMode(
+      merged.entity_defaults.display_mode,
+      "button"
+    )
 
     this.config = merged
     this._computeRenderModel()
@@ -1313,6 +1374,95 @@ class AlphaAreaCard extends HTMLElement {
     performAction(this, this._hass, entityConfig, normalized)
   }
 
+  _getEntityPresentation(entityConfig, asSensorLine = false) {
+    const defaults = this.config.entity_defaults || DEFAULT_CONFIG.entity_defaults
+    const styles = this.config.styles || STYLE_DEFAULTS
+    const displayMode = normalizeEntityDisplayMode(
+      entityConfig.display_mode || entityConfig.display || defaults.display_mode,
+      asSensorLine ? "button" : "button"
+    )
+
+    const showName =
+      typeof entityConfig.show_name === "boolean"
+        ? entityConfig.show_name
+        : typeof defaults.show_name === "boolean"
+          ? defaults.show_name
+          : asSensorLine
+
+    const showState =
+      typeof entityConfig.show_state === "boolean"
+        ? entityConfig.show_state
+        : typeof defaults.show_state === "boolean"
+          ? defaults.show_state
+          : asSensorLine
+
+    return {
+      displayMode,
+      showName: asSensorLine || showName,
+      showState: asSensorLine || showState,
+      text: entityConfig.text || defaults.text || "",
+      icon: entityConfig.icon || defaults.icon || "",
+      iconOn: entityConfig.icon_on || defaults.icon_on || "",
+      iconOff: entityConfig.icon_off || defaults.icon_off || "",
+      iconColorOn:
+        entityConfig.icon_color_on || defaults.icon_color_on || styles.button_icon_color_on,
+      iconColorOff:
+        entityConfig.icon_color_off || defaults.icon_color_off || styles.button_icon_color_off,
+      textColorOn:
+        entityConfig.text_color_on ||
+        defaults.text_color_on ||
+        entityConfig.icon_color_on ||
+        defaults.icon_color_on ||
+        styles.button_icon_color_on,
+      textColorOff:
+        entityConfig.text_color_off ||
+        defaults.text_color_off ||
+        entityConfig.icon_color_off ||
+        defaults.icon_color_off ||
+        styles.button_icon_color_off,
+      backgroundColorOn:
+        entityConfig.background_color_on ||
+        entityConfig.button_color_on ||
+        defaults.background_color_on,
+      backgroundColorOff:
+        entityConfig.background_color_off ||
+        entityConfig.button_color_off ||
+        defaults.background_color_off,
+    }
+  }
+
+  _getEntityButtonStyle(presentation) {
+    const vars = {
+      "--mac-entity-icon-color-on": resolveColorToken(presentation.iconColorOn),
+      "--mac-entity-icon-color-off": resolveColorToken(presentation.iconColorOff),
+      "--mac-entity-text-color-on": resolveColorToken(presentation.textColorOn),
+      "--mac-entity-text-color-off": resolveColorToken(presentation.textColorOff),
+      "--mac-entity-background-on": resolveColorToken(presentation.backgroundColorOn),
+      "--mac-entity-background-off": resolveColorToken(presentation.backgroundColorOff),
+    }
+
+    return Object.entries(vars)
+      .filter(([, value]) => value !== undefined && value !== null && value !== "")
+      .map(([name, value]) => `${name}: ${value};`)
+      .join(" ")
+  }
+
+  _getEntityPosition(entityConfig, fallbackPosition) {
+    const defaultPosition = this.config.entity_defaults?.position
+    return normalizeEntityPosition(entityConfig.position || defaultPosition, fallbackPosition)
+  }
+
+  _makePositionBuckets() {
+    return ENTITY_POSITIONS.reduce((buckets, position) => {
+      buckets[position] = []
+      return buckets
+    }, {})
+  }
+
+  _renderPositionZone(buckets, position) {
+    return `<div class=\"entity-zone zone-${position}\">${buckets[position].join("")}</div>`
+  }
+
   _renderEntityButton(entityConfig, asSensorLine = false) {
     const hass = this._hass
     const entityState = hass?.states?.[entityConfig.entity]
@@ -1325,9 +1475,17 @@ class AlphaAreaCard extends HTMLElement {
       return ""
     }
 
-    const icon = getEntityIcon(hass, entityState, entityConfig)
+    const presentation = this._getEntityPresentation(entityConfig, asSensorLine)
+    const isOn = isEntityActive(entityState)
+    const iconConfig = {
+      ...entityConfig,
+      icon:
+        (isOn ? presentation.iconOn : presentation.iconOff) ||
+        presentation.icon ||
+        entityConfig.icon,
+    }
+    const icon = getEntityIcon(hass, entityState, iconConfig)
     const name = getEntityName(hass, entityState, entityConfig.entity, entityConfig)
-    const isOn = entityState?.state === "on"
     const displayState = getDisplayState(
       hass,
       entityState,
@@ -1335,11 +1493,14 @@ class AlphaAreaCard extends HTMLElement {
       entityConfig
     )
     const title = displayState ? `${name}: ${displayState}` : name
+    const labelText = presentation.text || (presentation.showName || displayMode === "text" ? name : "")
+    const displayMode = presentation.displayMode
+    const buttonStyle = this._getEntityButtonStyle(presentation)
 
     const stateColorAttr = shouldUseStateColor(entityConfig, this.config)
       ? ' data-state-color="1"'
       : ""
-    const sensorHtml = asSensorLine
+    const sensorHtml = presentation.showState && displayState
       ? `<span class=\"sensor-value\">${escapeHtml(displayState)}</span>`
       : ""
 
@@ -1348,9 +1509,9 @@ class AlphaAreaCard extends HTMLElement {
       : ""
 
     return `
-      <button class=\"entity ${asSensorLine ? "sensor" : "action"} ${entityConfig.alert ? "alert" : ""} ${isOn ? "is-on" : ""}\" data-entity-id=\"${escapeAttribute(entityConfig.entity)}\" title=\"${escapeAttribute(title)}\"${stateColorAttr}>
+      <button class=\"entity entity--${displayMode} ${asSensorLine ? "sensor" : "action"} ${entityConfig.alert ? "alert" : ""} ${isOn ? "is-on" : ""}\" data-entity-id=\"${escapeAttribute(entityConfig.entity)}\" title=\"${escapeAttribute(title)}\" style=\"${escapeAttribute(buttonStyle)}\"${stateColorAttr}>
         <ha-icon icon=\"${escapeAttribute(icon)}\" class=\"entity-icon\"></ha-icon>
-        ${asSensorLine ? `<span class=\"entity-label\">${escapeHtml(name)}</span>` : ""}
+        ${labelText ? `<span class=\"entity-label\">${escapeHtml(labelText)}</span>` : ""}
         ${sensorHtml}
         ${badgeHtml}
       </button>
@@ -1384,6 +1545,7 @@ class AlphaAreaCard extends HTMLElement {
       "--mac-badge-text-color": styles.badge_text_color,
       "--mac-button-light-color-on": styles.button_light_color_on,
       "--mac-badge-background": styles.badge_background,
+      "--mac-title-color": styles.title_color,
       "--mac-title-font-weight": styles.title_font_weight,
       "--mac-title-text-transform": styles.title_text_transform,
       "--mac-title-text-shadow": styles.title_text_shadow,
@@ -1413,47 +1575,43 @@ class AlphaAreaCard extends HTMLElement {
     const fixedHeight = Boolean(configuredHeight)
     const darkenFilter = this._getDarkenFilter()
     const styles = this.config.styles || {}
+    const entityBuckets = this._makePositionBuckets()
+    const addEntity = (entity, asSensorLine, fallbackPosition) => {
+      const position = this._getEntityPosition(entity, fallbackPosition)
+      const rendered = this._renderEntityButton(entity, asSensorLine)
+      if (rendered) {
+        entityBuckets[position].push(rendered)
+      }
+    }
 
-    const sensorSummaryButtons = this._renderModel.sensorSummaries
-      .map((entity) => this._renderEntityButton(entity, true))
-      .filter(Boolean)
-      .join("")
+    this._renderModel.sensorSummaries.forEach((entity) => addEntity(entity, true, "top-left"))
+    this._renderModel.entitiesSensors.forEach((entity) => addEntity(entity, true, "top-left"))
+    this._renderModel.entitiesAlerts.forEach((entity) =>
+      addEntity({ ...entity, alert: true }, false, "title-right")
+    )
 
-    const sensorButtons = this._renderModel.entitiesSensors
-      .map((entity) => this._renderEntityButton(entity, true))
-      .filter(Boolean)
-      .join("")
-
-    const alertButtons = this._renderModel.entitiesAlerts
-      .map((entity) => this._renderEntityButton({ ...entity, alert: true }, false))
-      .filter(Boolean)
-      .join("")
-
-    const mediaButtons = this._renderModel.entitiesDialog
+    this._renderModel.entitiesDialog
       .filter((entity) => entity.entity.startsWith("media_player."))
-      .map((entity) => this._renderEntityButton(entity, false))
-      .filter(Boolean)
-      .join("")
+      .forEach((entity) => addEntity(entity, false, "bottom-left"))
 
-    const dialogButtons = this._renderModel.entitiesDialog
+    this._renderModel.entitiesDialog
       .filter((entity) => !entity.entity.startsWith("media_player."))
-      .map((entity) => this._renderEntityButton(entity, false))
-      .filter(Boolean)
-      .join("")
+      .forEach((entity) => addEntity(entity, false, "bottom-right"))
 
-    const toggleButtonList = this._renderModel.entitiesToggle
-      .map((entity) => this._renderEntityButton(entity, false))
-      .filter(Boolean)
-    const inlineFeatureButtons =
-      this.config.features_position === "inline" ? toggleButtonList.slice(0, 1).join("") : ""
-    const toggleButtons =
-      this.config.features_position === "inline"
-        ? toggleButtonList.slice(1).join("")
-        : toggleButtonList.join("")
+    this._renderModel.entitiesToggle.forEach((entity, index) => {
+      const fallbackPosition =
+        this.config.features_position === "inline" && index === 0 ? "title-right" : "bottom-right"
+      addEntity(entity, false, fallbackPosition)
+    })
 
-    const hasMedia = Boolean(mediaButtons)
-    const hasInlineMeta = Boolean(alertButtons || inlineFeatureButtons)
-    const hasSensors = Boolean(sensorSummaryButtons || sensorButtons)
+    const topZones = ["top-left", "top-center", "top-right"]
+    const bottomZones = ["bottom-left", "bottom-center", "bottom-right"]
+    const hasTopZones = topZones.some((position) => entityBuckets[position].length)
+    const hasBottomZones = bottomZones.some((position) => entityBuckets[position].length)
+    const hasTitleRight = entityBuckets["title-right"].length > 0
+    const entitySnapshot = ENTITY_POSITIONS.map(
+      (position) => `${position}:${entityBuckets[position].join("")}`
+    ).join("|")
 
     const stateSnapshot = JSON.stringify({
       title,
@@ -1464,19 +1622,13 @@ class AlphaAreaCard extends HTMLElement {
       cardHeight,
       fixedHeight,
       darkenFilter,
-      sensorButtons,
-      sensorSummaryButtons,
-      alertButtons,
-      inlineFeatureButtons,
-      mediaButtons,
-      dialogButtons,
-      toggleButtons,
+      entitySnapshot,
       vars: this._computeCardCssVariables(),
       stateColor: Boolean(this.config.state_color),
       shadow: Boolean(this.config.shadow),
-      hasMedia,
-      hasInlineMeta,
-      hasSensors,
+      hasTopZones,
+      hasBottomZones,
+      hasTitleRight,
       styles,
     })
 
@@ -1502,6 +1654,7 @@ class AlphaAreaCard extends HTMLElement {
           --mac-badge-text-color: ${STYLE_DEFAULTS.badge_text_color};
           --mac-button-light-color-on: ${STYLE_DEFAULTS.button_light_color_on};
           --mac-badge-background: ${STYLE_DEFAULTS.badge_background};
+          --mac-title-color: ${STYLE_DEFAULTS.title_color};
           --mac-title-font-weight: ${STYLE_DEFAULTS.title_font_weight};
           --mac-title-text-transform: ${STYLE_DEFAULTS.title_text_transform};
           --mac-title-text-shadow: ${STYLE_DEFAULTS.title_text_shadow};
@@ -1571,11 +1724,12 @@ class AlphaAreaCard extends HTMLElement {
           position: relative;
           z-index: 1;
           display: grid;
-          grid-template-rows: auto minmax(0, 1fr) auto;
+          grid-template-rows: auto auto minmax(0, 1fr) auto;
           gap: 6px;
           padding: 12px 14px;
           height: 100%;
           min-height: 0;
+          overflow: hidden;
           box-sizing: border-box;
         }
 
@@ -1590,6 +1744,7 @@ class AlphaAreaCard extends HTMLElement {
           font-size: 1.3rem;
           letter-spacing: 0;
           font-weight: var(--mac-title-font-weight);
+          color: var(--mac-title-color);
           text-transform: var(--mac-title-text-transform);
           text-shadow: var(--mac-title-text-shadow);
           margin: 0;
@@ -1599,11 +1754,57 @@ class AlphaAreaCard extends HTMLElement {
         }
 
         .inline-meta {
-          display: ${hasInlineMeta ? "flex" : "none"};
+          display: ${hasTitleRight ? "flex" : "none"};
           align-items: center;
           justify-content: flex-end;
           gap: 6px;
           flex-wrap: wrap;
+        }
+
+        .entity-zones {
+          display: grid;
+          grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+          gap: 8px;
+          min-width: 0;
+          min-height: 0;
+          align-items: start;
+        }
+
+        .entity-zones.is-empty {
+          display: none;
+        }
+
+        .bottom-zones {
+          align-items: end;
+        }
+
+        .content-spacer {
+          min-height: 0;
+        }
+
+        .entity-zone {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 6px;
+          min-width: 0;
+          min-height: 0;
+        }
+
+        .zone-top-left,
+        .zone-bottom-left {
+          justify-content: flex-start;
+        }
+
+        .zone-top-center,
+        .zone-bottom-center {
+          justify-content: center;
+        }
+
+        .zone-top-right,
+        .zone-bottom-right,
+        .zone-title-right {
+          justify-content: flex-end;
         }
 
         .area-icon {
@@ -1621,39 +1822,12 @@ class AlphaAreaCard extends HTMLElement {
           color: var(--primary-text-color, #f8fafc);
         }
 
-        .sensors {
-          display: flex;
-          flex-wrap: wrap;
-          align-items: center;
-          gap: 6px;
-          min-height: ${hasSensors ? "32px" : "0"};
-          min-width: 0;
-          overflow: hidden;
-        }
-
-        .actions {
-          display: flex;
-          align-items: center;
-          justify-content: ${hasMedia ? "space-between" : "flex-end"};
-          gap: 10px;
-          min-width: 0;
-        }
-
-        .actions-left,
-        .actions-right {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          flex-wrap: wrap;
-          min-width: 0;
-        }
-
         .entity {
           position: relative;
           border: 0;
           border-radius: 999px;
-          background: rgba(17, 24, 39, 0.32);
-          color: var(--mac-button-icon-color-off);
+          background: var(--mac-entity-background-off, rgba(17, 24, 39, 0.32));
+          color: var(--mac-entity-text-color-off, var(--mac-button-icon-color-off));
           display: inline-flex;
           align-items: center;
           gap: 6px;
@@ -1665,7 +1839,7 @@ class AlphaAreaCard extends HTMLElement {
         }
 
         .entity:hover {
-          background: rgba(17, 24, 39, 0.48);
+          background: var(--mac-entity-background-hover, rgba(17, 24, 39, 0.48));
         }
 
         .entity:focus-visible {
@@ -1678,16 +1852,21 @@ class AlphaAreaCard extends HTMLElement {
         }
 
         .entity.is-on {
-          color: var(--mac-button-icon-color-on);
+          color: var(--mac-entity-text-color-on, var(--mac-button-icon-color-on));
+          background: var(--mac-entity-background-on, rgba(17, 24, 39, 0.38));
         }
 
         .entity.is-on[data-state-color="1"] {
           color: var(--state-light-color, var(--mac-button-icon-color-on));
         }
 
+        .entity.is-on[data-state-color="1"] .entity-icon {
+          color: var(--state-light-color, var(--mac-button-icon-color-on));
+        }
+
         .entity.sensor {
           border-radius: 12px;
-          background: rgba(2, 6, 23, 0.2);
+          background: var(--mac-entity-background-off, rgba(2, 6, 23, 0.2));
           padding: 3px 8px;
         }
 
@@ -1715,7 +1894,39 @@ class AlphaAreaCard extends HTMLElement {
           width: 22px;
           height: 22px;
           --mdc-icon-size: 22px;
+          color: var(--mac-entity-icon-color-off, currentColor);
           ${this.config.shadow ? "filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4));" : ""}
+        }
+
+        .entity.is-on .entity-icon {
+          color: var(--mac-entity-icon-color-on, currentColor);
+        }
+
+        .entity--text {
+          border-radius: 6px;
+          background: transparent;
+          padding: 2px 0;
+        }
+
+        .entity--text:hover,
+        .entity--text.is-on {
+          background: transparent;
+        }
+
+        .entity--text .entity-icon {
+          display: none;
+        }
+
+        .entity--icon {
+          width: 34px;
+          height: 34px;
+          justify-content: center;
+          padding: 6px;
+        }
+
+        .entity--icon .entity-label,
+        .entity--icon .sensor-value {
+          display: none;
         }
 
         .entity-badge {
@@ -1763,12 +1974,18 @@ class AlphaAreaCard extends HTMLElement {
         <div class=\"content\">
           <div class=\"topline\">
             <h3 class=\"title\">${escapeHtml(title)}</h3>
-            <div class=\"inline-meta\">${alertButtons}${inlineFeatureButtons}</div>
+            <div class=\"inline-meta\">${this._renderPositionZone(entityBuckets, "title-right")}</div>
           </div>
-          <div class=\"sensors\">${sensorSummaryButtons}${sensorButtons}</div>
-          <div class=\"actions\">
-            <div class=\"actions-left\">${mediaButtons}</div>
-            <div class=\"actions-right\">${dialogButtons}${toggleButtons}</div>
+          <div class=\"entity-zones top-zones ${hasTopZones ? "" : "is-empty"}\">
+            ${this._renderPositionZone(entityBuckets, "top-left")}
+            ${this._renderPositionZone(entityBuckets, "top-center")}
+            ${this._renderPositionZone(entityBuckets, "top-right")}
+          </div>
+          <div class=\"content-spacer\"></div>
+          <div class=\"entity-zones bottom-zones ${hasBottomZones ? "" : "is-empty"}\">
+            ${this._renderPositionZone(entityBuckets, "bottom-left")}
+            ${this._renderPositionZone(entityBuckets, "bottom-center")}
+            ${this._renderPositionZone(entityBuckets, "bottom-right")}
           </div>
         </div>
       </ha-card>
@@ -1801,6 +2018,8 @@ class AlphaAreaCardEditor extends LitElement {
       hass: { type: Object },
       config: { type: Object },
       _jsonErrors: { type: Object },
+      _activeEntityTab: { type: String },
+      _activeEntityIndex: { type: Number },
     }
   }
 
@@ -1833,6 +2052,10 @@ class AlphaAreaCardEditor extends LitElement {
         ...DEFAULT_CONFIG.entity_double_tap_action,
         ...(incoming.entity_double_tap_action || {}),
       },
+      entity_defaults: {
+        ...DEFAULT_CONFIG.entity_defaults,
+        ...(incoming.entity_defaults || {}),
+      },
     }
     this.config.display_type = normalizeSelect(this.config.display_type, DISPLAY_TYPES, "picture")
     this.config.features_position = normalizeSelect(
@@ -1841,6 +2064,18 @@ class AlphaAreaCardEditor extends LitElement {
       "bottom"
     )
     this.config.height = normalizeCssSize(this.config.height)
+    this.config.entity_defaults.position = normalizeEntityPosition(
+      this.config.entity_defaults.position,
+      ""
+    )
+    this.config.entity_defaults.display_mode = normalizeEntityDisplayMode(
+      this.config.entity_defaults.display_mode,
+      "button"
+    )
+    this._activeEntityTab = this._activeEntityTab || "list"
+    this._activeEntityIndex = Number.isInteger(this._activeEntityIndex)
+      ? this._activeEntityIndex
+      : 0
     this._jsonErrors = {}
   }
 
@@ -1862,6 +2097,14 @@ class AlphaAreaCardEditor extends LitElement {
         const styles = this._pruneObject(value, DEFAULT_CONFIG.styles)
         if (Object.keys(styles).length) {
           cleaned.styles = styles
+        }
+        continue
+      }
+
+      if (key === "entity_defaults") {
+        const entityDefaults = this._pruneObject(value, DEFAULT_CONFIG.entity_defaults)
+        if (Object.keys(entityDefaults).length) {
+          cleaned.entity_defaults = entityDefaults
         }
         continue
       }
@@ -2172,15 +2415,16 @@ class AlphaAreaCardEditor extends LitElement {
 
   _addEntity() {
     const entities = this.config.entities || []
+    this._activeEntityIndex = entities.length
+    this._activeEntityTab = "entity"
     this._setValue("entities", [...entities, ""])
   }
 
   _removeEntity(index) {
     const entities = this.config.entities || []
-    this._setValue(
-      "entities",
-      entities.filter((_, i) => i !== index)
-    )
+    const updated = entities.filter((_, i) => i !== index)
+    this._activeEntityIndex = Math.max(0, Math.min(this._activeEntityIndex || 0, updated.length - 1))
+    this._setValue("entities", updated)
   }
 
   _setEntity(index, value) {
@@ -2210,6 +2454,132 @@ class AlphaAreaCardEditor extends LitElement {
     entities[index] = entities[target]
     entities[target] = current
     this._setValue("entities", entities)
+  }
+
+  _selectEntity(index) {
+    this._activeEntityIndex = index
+    this._activeEntityTab = "entity"
+    this.requestUpdate()
+  }
+
+  _setEntityTab(tab) {
+    this._activeEntityTab = tab
+    this.requestUpdate()
+  }
+
+  _cleanEntityItem(item) {
+    if (!item || typeof item !== "object") {
+      return item
+    }
+
+    const cleaned = { ...item }
+    for (const [key, value] of Object.entries(cleaned)) {
+      if (key === "entity") {
+        continue
+      }
+      if (value === "" || value === undefined || value === null) {
+        delete cleaned[key]
+      }
+    }
+
+    return Object.keys(cleaned).length === 1 && cleaned.entity ? cleaned.entity : cleaned
+  }
+
+  _updateEntityItem(index, updater) {
+    const entities = [...(this.config.entities || [])]
+    const current = entities[index]
+    if (current === undefined) {
+      return
+    }
+
+    const entityConfig =
+      current && typeof current === "object" ? { ...current } : { entity: safeText(current) }
+
+    updater(entityConfig)
+    entities[index] = this._cleanEntityItem(entityConfig)
+    this._setValue("entities", entities)
+  }
+
+  _setEntityOption(index, key, value) {
+    this._updateEntityItem(index, (entityConfig) => {
+      if (value === "" || value === undefined || value === null) {
+        delete entityConfig[key]
+      } else {
+        entityConfig[key] = value
+      }
+    })
+  }
+
+  _onEntityInput(index, key, event) {
+    this._setEntityOption(index, key, safeText(event.target.value).trim())
+  }
+
+  _onEntityBoolean(index, key, event) {
+    this._setEntityOption(index, key, event.target.checked)
+  }
+
+  _renderPositionSelect(value, onChange, includeAuto = true) {
+    const labels = {
+      "bottom-left": "Bas gauche",
+      "bottom-center": "Bas centre",
+      "bottom-right": "Bas droite",
+      "top-left": "Haut gauche",
+      "top-center": "Haut centre",
+      "top-right": "Haut droite",
+      "title-right": "Titre droite",
+    }
+
+    return html`
+      <select .value="${value || ""}" @change="${onChange}">
+        ${includeAuto ? html`<option value="">Automatique</option>` : ""}
+        ${ENTITY_POSITIONS.map(
+          (position) => html`<option value="${position}">${labels[position]}</option>`
+        )}
+      </select>
+    `
+  }
+
+  _renderDisplayModeSelect(value, onChange, includeDefault = true) {
+    const labels = {
+      button: "Bouton",
+      text: "Texte",
+      icon: "Icône seule",
+    }
+
+    return html`
+      <select .value="${value || ""}" @change="${onChange}">
+        ${includeDefault ? html`<option value="">Défaut</option>` : ""}
+        ${ENTITY_DISPLAY_MODES.map(
+          (mode) => html`<option value="${mode}">${labels[mode]}</option>`
+        )}
+      </select>
+    `
+  }
+
+  _renderEntityColorField(label, index, key, fallback) {
+    const entities = this.config.entities || []
+    const parsed = parseEntityConfig(entities[index]) || {}
+    const value = parsed[key] || ""
+    const hexValue = this._toHexColor(value, fallback)
+
+    return html`
+      <div class="color-field">
+        <label>${label}</label>
+        <div class="color-row">
+          <input
+            class="color-input"
+            type="color"
+            .value="${hexValue}"
+            @input="${(event) => this._setEntityOption(index, key, event.target.value)}"
+          />
+          <input
+            .value="${value}"
+            @input="${(event) => this._onEntityInput(index, key, event)}"
+            placeholder="${fallback}"
+          />
+        </div>
+      </div>
+    `
   }
 
   _renderEntitiesField() {
@@ -2244,6 +2614,13 @@ class AlphaAreaCardEditor extends LitElement {
                       @value-changed="${(event) => this._setEntity(index, event.detail.value)}"
                     ></ha-entity-picker>
                     <div class="entity-actions">
+                      <button
+                        class="move-button"
+                        @click="${() => this._selectEntity(index)}"
+                        title="Configurer"
+                      >
+                        ⚙
+                      </button>
                       <button
                         class="move-button"
                         @click="${() => this._moveEntity(index, "up")}"
@@ -2281,6 +2658,192 @@ class AlphaAreaCardEditor extends LitElement {
     `
   }
 
+  _renderEntityDefaultsTab() {
+    const defaults = this.config.entity_defaults || DEFAULT_CONFIG.entity_defaults
+
+    return html`
+      <div class="entity-settings-grid">
+        <label>Position par défaut</label>
+        ${this._renderPositionSelect(
+          defaults.position || "",
+          (event) => this._setValue("entity_defaults.position", event.target.value),
+          true
+        )}
+
+        <label>Affichage par défaut</label>
+        ${this._renderDisplayModeSelect(
+          defaults.display_mode || "button",
+          (event) => this._setValue("entity_defaults.display_mode", event.target.value || "button"),
+          false
+        )}
+
+        <label>
+          <input
+            type="checkbox"
+            .checked="${!!defaults.show_name}"
+            @change="${(event) => this._onBoolean("entity_defaults.show_name", event)}"
+          />
+          Afficher le nom par défaut
+        </label>
+
+        <label>
+          <input
+            type="checkbox"
+            .checked="${!!defaults.show_state}"
+            @change="${(event) => this._onBoolean("entity_defaults.show_state", event)}"
+          />
+          Afficher l'état par défaut
+        </label>
+
+        ${this._renderColorField("Icône active par défaut", "entity_defaults.icon_color_on", "#03A9F4")}
+        ${this._renderColorField("Icône inactive par défaut", "entity_defaults.icon_color_off", "#9CA3AF")}
+        ${this._renderColorField("Texte actif par défaut", "entity_defaults.text_color_on", "#03A9F4")}
+        ${this._renderColorField("Texte inactif par défaut", "entity_defaults.text_color_off", "#9CA3AF")}
+        ${this._renderColorField("Fond bouton actif par défaut", "entity_defaults.background_color_on", "#1f2937")}
+        ${this._renderColorField("Fond bouton inactif par défaut", "entity_defaults.background_color_off", "#111827")}
+      </div>
+    `
+  }
+
+  _renderEntityDetailsTab() {
+    const entities = this.config.entities || []
+    const index = Math.max(0, Math.min(this._activeEntityIndex || 0, entities.length - 1))
+    const parsed = parseEntityConfig(entities[index])
+
+    if (!parsed) {
+      return html`<div class="empty-state">Ajoutez une entité pour ouvrir ses réglages.</div>`
+    }
+
+    return html`
+      <div class="entity-detail">
+        <label>Entité à configurer</label>
+        <select
+          .value="${String(index)}"
+          @change="${(event) => this._selectEntity(Number(event.target.value))}"
+        >
+          ${entities.map((entity, optionIndex) => {
+            const item = parseEntityConfig(entity)
+            return html`
+              <option value="${String(optionIndex)}" ?selected="${optionIndex === index}">
+                ${item?.entity || `Entité ${optionIndex + 1}`}
+              </option>
+            `
+          })}
+        </select>
+
+        <label>Entité</label>
+        <ha-entity-picker
+          .hass="${this.hass}"
+          .value="${parsed.entity || ""}"
+          allow-custom-entity
+          @value-changed="${(event) => this._setEntity(index, event.detail.value)}"
+        ></ha-entity-picker>
+
+        <label>Position</label>
+        ${this._renderPositionSelect(parsed.position || "", (event) =>
+          this._setEntityOption(index, "position", event.target.value)
+        )}
+
+        <label>Affichage</label>
+        ${this._renderDisplayModeSelect(parsed.display_mode || parsed.display || "", (event) =>
+          this._setEntityOption(index, "display_mode", event.target.value)
+        )}
+
+        <label>Texte du bouton</label>
+        <input
+          .value="${parsed.text || ""}"
+          placeholder="Lumière, TV, Ventilateur..."
+          @input="${(event) => this._onEntityInput(index, "text", event)}"
+        />
+
+        <label>Nom affiché</label>
+        <input
+          .value="${parsed.name || ""}"
+          placeholder="Nom personnalisé"
+          @input="${(event) => this._onEntityInput(index, "name", event)}"
+        />
+
+        <label>
+          <input
+            type="checkbox"
+            .checked="${!!parsed.show_name}"
+            @change="${(event) => this._onEntityBoolean(index, "show_name", event)}"
+          />
+          Afficher le nom
+        </label>
+
+        <label>
+          <input
+            type="checkbox"
+            .checked="${!!parsed.show_state}"
+            @change="${(event) => this._onEntityBoolean(index, "show_state", event)}"
+          />
+          Afficher l'état
+        </label>
+
+        <label>Icône</label>
+        <input
+          .value="${parsed.icon || ""}"
+          placeholder="mdi:lightbulb"
+          @input="${(event) => this._onEntityInput(index, "icon", event)}"
+        />
+
+        <label>Icône active</label>
+        <input
+          .value="${parsed.icon_on || ""}"
+          placeholder="mdi:lightbulb-on"
+          @input="${(event) => this._onEntityInput(index, "icon_on", event)}"
+        />
+
+        <label>Icône inactive</label>
+        <input
+          .value="${parsed.icon_off || ""}"
+          placeholder="mdi:lightbulb-outline"
+          @input="${(event) => this._onEntityInput(index, "icon_off", event)}"
+        />
+
+        <div class="entity-detail-columns">
+          ${this._renderEntityColorField("Couleur icône active", index, "icon_color_on", "#03A9F4")}
+          ${this._renderEntityColorField("Couleur icône inactive", index, "icon_color_off", "#9CA3AF")}
+          ${this._renderEntityColorField("Couleur texte active", index, "text_color_on", "#FFFFFF")}
+          ${this._renderEntityColorField("Couleur texte inactive", index, "text_color_off", "#CBD5E1")}
+          ${this._renderEntityColorField("Fond bouton actif", index, "background_color_on", "#164E63")}
+          ${this._renderEntityColorField("Fond bouton inactif", index, "background_color_off", "#111827")}
+        </div>
+      </div>
+    `
+  }
+
+  _renderEntitiesPanel() {
+    const activeTab = this._activeEntityTab || "list"
+    const tabs = [
+      ["list", "Liste"],
+      ["defaults", "Défauts"],
+      ["entity", "Réglages"],
+    ]
+
+    return html`
+      <div class="subtabs">
+        ${tabs.map(
+          ([id, label]) => html`
+            <button
+              class="${activeTab === id ? "active" : ""}"
+              @click="${() => this._setEntityTab(id)}"
+              type="button"
+            >
+              ${label}
+            </button>
+          `
+        )}
+      </div>
+      ${activeTab === "defaults"
+        ? this._renderEntityDefaultsTab()
+        : activeTab === "entity"
+          ? this._renderEntityDetailsTab()
+          : this._renderEntitiesField()}
+    `
+  }
+
   render() {
     if (!this.config) return html``
 
@@ -2296,6 +2859,8 @@ class AlphaAreaCardEditor extends LitElement {
               .value="${this.config.title || ""}"
               @input="${(event) => this._onInput("title", event)}"
             />
+
+            ${this._renderColorField("Couleur du titre", "styles.title_color", "#f8fafc")}
 
             <label>Zone</label>
             <select
@@ -2366,8 +2931,6 @@ class AlphaAreaCardEditor extends LitElement {
               Auto-remplir les entités depuis la zone si la liste est vide
             </label>
 
-            ${this._renderEntitiesField()}
-
             ${this.config.display_type !== "camera"
               ? html`
                   <label>Image de fond (URL ou /local/...)</label>
@@ -2399,6 +2962,13 @@ class AlphaAreaCardEditor extends LitElement {
           </div>
         </details>
 
+        <details open>
+          <summary>Entités</summary>
+          <div class="section-content">
+            ${this._renderEntitiesPanel()}
+          </div>
+        </details>
+
         <details>
           <summary>Actions</summary>
           <div class="section-content">
@@ -2417,19 +2987,8 @@ class AlphaAreaCardEditor extends LitElement {
         </details>
 
         <details>
-          <summary>Styles</summary>
+          <summary>Apparence</summary>
           <div class="section-content">
-            ${this._renderColorField("Couleur icône ON", "styles.button_icon_color_on", "#c7a975")}
-            ${this._renderColorField(
-              "Couleur icône OFF",
-              "styles.button_icon_color_off",
-              "#f0f0f0"
-            )}
-            ${this._renderColorField(
-              "Couleur lumière ON",
-              "styles.button_light_color_on",
-              "#c7a975"
-            )}
             ${this._renderColorField("Couleur texte badge", "styles.badge_text_color", "#0667c1")}
             ${this._renderColorField("Fond badge", "styles.badge_background", "#e8f359")}
 
@@ -2675,6 +3234,43 @@ class AlphaAreaCardEditor extends LitElement {
         gap: 8px;
       }
 
+      .subtabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        padding: 4px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.04);
+      }
+
+      .subtabs button {
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--secondary-text-color, #9ca3af);
+        padding: 7px 10px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .subtabs button.active {
+        background: rgba(56, 189, 248, 0.18);
+        color: var(--primary-text-color, #f9fafb);
+      }
+
+      .entity-settings-grid,
+      .entity-detail {
+        display: grid;
+        gap: 10px;
+      }
+
+      .entity-detail-columns {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
       .entities-header {
         display: flex;
         justify-content: space-between;
@@ -2784,6 +3380,10 @@ class AlphaAreaCardEditor extends LitElement {
 
         .entity-row {
           grid-template-columns: 1fr auto 32px;
+        }
+
+        .entity-detail-columns {
+          grid-template-columns: 1fr;
         }
 
         .remove-button {

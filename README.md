@@ -19,11 +19,13 @@ Combinez image, capteurs et commandes dans un composant lisible, mobile-first et
 
 - ajout Lovelace vierge: aucun salon/cuisine/exemple n'est injecte par defaut
 - prise en charge native des zones Home Assistant
-- editeur graphique integre au standard du workspace (`General`, `Actions`, `Styles`, `Defaults`)
+- editeur graphique integre avec sections `General`, `Entites`, `Actions`, `Apparence`, `Defaults`
 - affichage optimise des capteurs, alertes, toggles et entites secondaires
 - options modernes de l'Area card: `display_type`, `camera_view`, `aspect_ratio`, `color`, `sensor_classes`, `alert_classes`, `features_position`
 - largeur full width par defaut et hauteur precise configurable avec `height`
 - icones d'entites resolues depuis la config, Home Assistant, le registre, puis le domaine/device_class
+- positionnement precis des entites: bas/haut gauche, centre, droite ou droite du titre
+- affichage par entite en bouton, texte ou icone seule, avec couleurs active/inactive
 - support `features: [{ type: area-controls }]` avec filtres `controls`
 - actions avances: `tap_action`, `hold_action`, `double_tap_action` pour la carte
 - actions par defaut pour les entites en `hold` et `double tap`
@@ -76,6 +78,26 @@ camera_view: auto
 aspect_ratio: 16:9
 height: 220px
 color: primary
+styles:
+  title_color: "#ffffff"
+entity_defaults:
+  position: bottom-right
+  display_mode: button
+  icon_color_on: "#ffd166"
+  icon_color_off: "#d1d5db"
+entities:
+  - entity: light.salon_lampe
+    position: title-right
+    text: Lampe
+    icon_on: mdi:lightbulb-on
+    icon_off: mdi:lightbulb-outline
+    icon_color_on: "#ffd166"
+    icon_color_off: "#94a3b8"
+    background_color_on: "rgba(255, 209, 102, 0.22)"
+  - entity: sensor.salon_temperature
+    position: top-left
+    display_mode: text
+    show_state: true
 sensor_classes:
   - temperature
   - humidity
@@ -106,6 +128,7 @@ tap_action:
 - color: token Home Assistant ou couleur hex pour l'accent
 - auto_area_entities: auto-remplissage depuis la zone quand la liste d'entites est vide
 - entities: entites secondaires affichees dans la carte
+- entity_defaults: valeurs par defaut appliquees aux entites (`position`, `display_mode`, `show_name`, `show_state`, couleurs)
 - hide_unavailable: masque les entites indisponibles
 - tap_action: action principale au clic
 - hold_action: action carte au clic droit / hold
@@ -127,6 +150,22 @@ tap_action:
 - force_dialog: force l'ouverture du detail de zone
 - state_color: applique les couleurs d'etat Home Assistant
 - card_mod.style: surcharge CSS si card-mod est utilise
+
+## 🎛️ Personnalisation des entites
+
+Chaque entree de `entities` peut rester une chaine simple ou devenir un objet detaille.
+
+- position: `bottom-left`, `bottom-center`, `bottom-right`, `top-left`, `top-center`, `top-right`, `title-right`
+- display_mode: `button`, `text`, `icon`
+- text: texte ajoute dans le bouton
+- name: nom affiche a la place du nom Home Assistant
+- show_name / show_state: affichage du nom et de l'etat
+- icon, icon_on, icon_off: icone forcee ou differente selon l'etat
+- icon_color_on / icon_color_off: couleur de l'icone active/inactive
+- text_color_on / text_color_off: couleur du texte actif/inactif
+- background_color_on / background_color_off: fond du bouton actif/inactif
+
+Les positions automatiques restent compatibles: capteurs en haut gauche, medias en bas gauche, toggles et entites secondaires en bas droite, alertes ou feature inline a droite du titre.
 
 ## 🛠️ Editeur graphique
 
