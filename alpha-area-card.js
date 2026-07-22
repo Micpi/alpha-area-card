@@ -389,6 +389,48 @@ const getPixelHeightFromCssSize = (value) => {
   return match ? Number(match[1]) : 0
 }
 
+const getImageServePath = (value) => {
+  const text = safeText(value).trim()
+  if (!text) {
+    return ""
+  }
+
+  const imageServeMatch = text.match(/^(\/api\/image\/serve\/[^/]+)\/(?:original|\d+x\d+)$/)
+  if (imageServeMatch) {
+    return `${imageServeMatch[1]}/original`
+  }
+
+  if (text.startsWith("media-source://image_upload/")) {
+    const imageId = text.split("/").pop()
+    return imageId ? `/api/image/serve/${imageId}/original` : ""
+  }
+
+  if (text.startsWith("media-source://media_source/local/")) {
+    return `/media/local/${text.slice("media-source://media_source/local/".length)}`
+  }
+
+  return ""
+}
+
+const normalizeImageSourceValue = (value) => {
+  if (value === undefined || value === null) {
+    return ""
+  }
+
+  if (typeof value === "string") {
+    return safeText(value).trim()
+  }
+
+  if (typeof value !== "object") {
+    return ""
+  }
+
+  const mediaContentId = value.media_content_id || value.mediaContentId
+  const thumbnail = value.metadata?.thumbnail || value.thumbnail
+  const direct = value.url || value.path || value.image || mediaContentId
+  return getImageServePath(direct) || getImageServePath(thumbnail) || safeText(thumbnail || direct).trim()
+}
+
 const normalizeActionConfig = (actionConfig, fallbackAction = "more-info") => {
   if (!actionConfig || typeof actionConfig !== "object") {
     return { action: fallbackAction }
@@ -747,6 +789,7 @@ class AlphaAreaCard extends HTMLElement {
     )
     merged.features = Array.isArray(merged.features) ? merged.features.filter(Boolean) : []
     merged.camera_entity = safeText(merged.camera_entity || merged.camera_image)
+    merged.image = normalizeImageSourceValue(merged.image)
     merged.height = normalizeCssSize(merged.height)
     merged.styles.border_radius = normalizeCssSize(merged.styles.border_radius, "16px")
     merged.styles.title_effect = normalizeTitleEffect(merged.styles.title_effect, "shadow")
@@ -1192,7 +1235,7 @@ class AlphaAreaCard extends HTMLElement {
       return ""
     }
 
-    const explicitImage = this.config.image
+    const explicitImage = normalizeImageSourceValue(this.config.image)
     const areaPicture = this._renderModel.area?.picture
     const selected = explicitImage || areaPicture
 
@@ -1912,7 +1955,7 @@ class AlphaAreaCard extends HTMLElement {
 
         ha-card {
           position: relative;
-          overflow: visible;
+          overflow: hidden;
           width: 100%;
           box-sizing: border-box;
           border-radius: var(--mac-card-border-radius, var(--ha-card-border-radius, 16px));
@@ -1950,7 +1993,8 @@ class AlphaAreaCard extends HTMLElement {
           z-index: 0;
           pointer-events: none;
           overflow: hidden;
-          border-radius: inherit;
+          border-radius: var(--mac-card-border-radius, var(--ha-card-border-radius, 16px));
+          clip-path: inset(0 round var(--mac-card-border-radius, var(--ha-card-border-radius, 16px)));
         }
 
         .bg img {
@@ -1964,6 +2008,8 @@ class AlphaAreaCard extends HTMLElement {
         .overlay {
           position: absolute;
           inset: 0;
+          border-radius: var(--mac-card-border-radius, var(--ha-card-border-radius, 16px));
+          clip-path: inset(0 round var(--mac-card-border-radius, var(--ha-card-border-radius, 16px)));
           background: linear-gradient(180deg, rgba(15, 23, 42, 0.08) 0%, rgba(15, 23, 42, 0.58) 82%);
         }
 
@@ -2344,6 +2390,7 @@ class AlphaAreaCardEditor extends LitElement {
       FEATURE_POSITIONS,
       "bottom"
     )
+    this.config.image = normalizeImageSourceValue(this.config.image)
     this.config.height = normalizeCssSize(this.config.height)
     this.config.styles.border_radius = normalizeCssSize(this.config.styles.border_radius, "16px")
     this.config.styles.title_effect = normalizeTitleEffect(this.config.styles.title_effect, "shadow")
@@ -2477,6 +2524,71 @@ class AlphaAreaCardEditor extends LitElement {
     }
   }
 
+  _readConfigPath(path) {
+    const parts = path.split(".")
+    let node = this.config
+    for (const part of parts) {
+      node = node?.[part]
+    }
+    return node
+  }
+
+  _getSelectorValue(event) {
+    if (event?.detail && Object.prototype.hasOwnProperty.call(event.detail, "value")) {
+      return event.detail.value
+    }
+    return event?.target?.value
+  }
+
+  _normalizePickerColor(value) {
+    if (Array.isArray(value) && value.length >= 3) {
+      const [red, green, blue] = value.map((item) =>
+        Math.max(0, Math.min(255, Math.round(Number(item) || 0)))
+      )
+      return `#${[red, green, blue]
+        .map((channel) => channel.toString(16).padStart(2, "0"))
+        .join("")}`
+    }
+
+    if (value && typeof value === "object") {
+      if (Array.isArray(value.rgb_color)) {
+        return this._normalizePickerColor(value.rgb_color)
+      }
+      if (value.value !== undefined) {
+        return this._normalizePickerColor(value.value)
+      }
+    }
+
+    return safeText(value).trim()
+  }
+
+  _onSelectorInput(path, event) {
+    const value = safeText(this._getSelectorValue(event)).trim()
+    if (!value) {
+      this._removeValue(path)
+      return
+    }
+    this._setValue(path, value)
+  }
+
+  _onColorSelector(path, event) {
+    const value = this._normalizePickerColor(this._getSelectorValue(event))
+    if (!value) {
+      this._removeValue(path)
+      return
+    }
+    this._setValue(path, value)
+  }
+
+  _onImagePicker(path, event) {
+    const value = normalizeImageSourceValue(this._getSelectorValue(event))
+    if (!value) {
+      this._removeValue(path)
+      return
+    }
+    this._setValue(path, value)
+  }
+
   _toHexColor(value, fallback = "#c7a975") {
     if (!value || typeof value !== "string") return fallback
     const normalized = value.trim()
@@ -2488,18 +2600,72 @@ class AlphaAreaCardEditor extends LitElement {
     return fallback
   }
 
+  _renderIconPicker(label, path, placeholder = "mdi:home") {
+    const value = this._readConfigPath(path) || ""
+
+    return html`
+      <div class="picker-field">
+        <label>${label}</label>
+        <ha-selector
+          class="native-picker"
+          .hass="${this.hass}"
+          .selector="${{ icon: { placeholder } }}"
+          .value="${value}"
+          @value-changed="${(event) => this._onSelectorInput(path, event)}"
+        ></ha-selector>
+        <input
+          class="fallback-input"
+          .value="${value}"
+          placeholder="${placeholder}"
+          @change="${(event) => this._onInput(path, event)}"
+        />
+      </div>
+    `
+  }
+
+  _renderImagePicker(label, path, placeholder = "/local/images/zone.jpg") {
+    const value = normalizeImageSourceValue(this._readConfigPath(path))
+
+    return html`
+      <div class="picker-field">
+        <label>${label}</label>
+        <ha-picture-upload
+          class="native-picker image-picker"
+          .hass="${this.hass}"
+          .value="${value || null}"
+          select-media
+          @change="${(event) => this._onImagePicker(path, event)}"
+        ></ha-picture-upload>
+        <input
+          class="fallback-input"
+          .value="${value}"
+          placeholder="${placeholder}"
+          @change="${(event) => this._onInput(path, event)}"
+        />
+      </div>
+    `
+  }
+
   _renderColorField(label, path, fallback) {
-    const parts = path.split(".")
-    let node = this.config
-    for (const part of parts.slice(0, -1)) {
-      node = node?.[part]
-    }
-    const value = node?.[parts[parts.length - 1]] || ""
+    const value = this._readConfigPath(path) || ""
     const hexValue = this._toHexColor(value, fallback)
 
     return html`
       <div class="color-field">
         <label>${label}</label>
+        <ha-selector
+          class="native-picker"
+          .hass="${this.hass}"
+          .selector="${{
+            ui_color: {
+              default_color: fallback,
+              include_none: true,
+              include_state: true,
+            },
+          }}"
+          .value="${value || fallback}"
+          @value-changed="${(event) => this._onColorSelector(path, event)}"
+        ></ha-selector>
         <div class="color-row">
           <input
             class="color-input"
@@ -2896,6 +3062,32 @@ class AlphaAreaCardEditor extends LitElement {
     `
   }
 
+  _renderEntityIconPicker(label, index, key, placeholder = "mdi:home", overrideValue = undefined) {
+    const entities = this.config.entities || []
+    const parsed = parseEntityConfig(entities[index]) || {}
+    const value = overrideValue !== undefined ? overrideValue : parsed[key] || ""
+
+    return html`
+      <div class="picker-field">
+        <label>${label}</label>
+        <ha-selector
+          class="native-picker"
+          .hass="${this.hass}"
+          .selector="${{ icon: { placeholder } }}"
+          .value="${value}"
+          @value-changed="${(event) =>
+            this._setEntityOption(index, key, safeText(this._getSelectorValue(event)).trim())}"
+        ></ha-selector>
+        <input
+          class="fallback-input"
+          .value="${value}"
+          placeholder="${placeholder}"
+          @change="${(event) => this._onEntityInput(index, key, event)}"
+        />
+      </div>
+    `
+  }
+
   _renderEntityColorField(label, index, key, fallback) {
     const entities = this.config.entities || []
     const parsed = parseEntityConfig(entities[index]) || {}
@@ -2905,6 +3097,20 @@ class AlphaAreaCardEditor extends LitElement {
     return html`
       <div class="color-field">
         <label>${label}</label>
+        <ha-selector
+          class="native-picker"
+          .hass="${this.hass}"
+          .selector="${{
+            ui_color: {
+              default_color: fallback,
+              include_none: true,
+              include_state: true,
+            },
+          }}"
+          .value="${value || fallback}"
+          @value-changed="${(event) =>
+            this._setEntityOption(index, key, this._normalizePickerColor(this._getSelectorValue(event)))}"
+        ></ha-selector>
         <div class="color-row">
           <input
             class="color-input"
@@ -3091,26 +3297,9 @@ class AlphaAreaCardEditor extends LitElement {
           Afficher l'état
         </label>
 
-        <label>Icône</label>
-        <input
-          .value="${parsed.icon || ""}"
-          placeholder="mdi:lightbulb"
-          @change="${(event) => this._onEntityInput(index, "icon", event)}"
-        />
-
-        <label>Icône active</label>
-        <input
-          .value="${parsed.icon_on || ""}"
-          placeholder="mdi:lightbulb-on"
-          @change="${(event) => this._onEntityInput(index, "icon_on", event)}"
-        />
-
-        <label>Icône inactive</label>
-        <input
-          .value="${parsed.icon_off || ""}"
-          placeholder="mdi:lightbulb-outline"
-          @change="${(event) => this._onEntityInput(index, "icon_off", event)}"
-        />
+        ${this._renderEntityIconPicker("Icône", index, "icon", "mdi:lightbulb")}
+        ${this._renderEntityIconPicker("Icône active", index, "icon_on", "mdi:lightbulb-on")}
+        ${this._renderEntityIconPicker("Icône inactive", index, "icon_off", "mdi:lightbulb-outline")}
 
         <div class="entity-detail-columns">
           ${this._renderEntityColorField("Couleur icône active", index, "icon_color_on", "#03A9F4")}
@@ -3177,12 +3366,7 @@ class AlphaAreaCardEditor extends LitElement {
                   @change="${(event) => this._onEntityInput(index, "badge_text", event)}"
                 />
 
-                <label>Icône badge</label>
-                <input
-                  .value="${badgeIcon}"
-                  placeholder="mdi:check"
-                  @change="${(event) => this._onEntityInput(index, "badge_icon", event)}"
-                />
+                ${this._renderEntityIconPicker("Icône badge", index, "badge_icon", "mdi:check", badgeIcon)}
 
                 <label>Position badge</label>
                 ${this._renderBadgePositionSelect(badgePosition, (event) =>
@@ -3245,6 +3429,8 @@ class AlphaAreaCardEditor extends LitElement {
             />
 
             ${this._renderColorField("Couleur du titre", "styles.title_color", "#f8fafc")}
+
+            ${this._renderIconPicker("Icône de la carte", "icon", "mdi:home-map-marker")}
 
             <label>Zone</label>
             <select
@@ -3335,20 +3521,10 @@ class AlphaAreaCardEditor extends LitElement {
                   ></ha-entity-picker>
                 `
               : html`
-                  <label>Image de fond (URL ou /local/...)</label>
-                  <input
-                    .value="${this.config.image || ""}"
-                    placeholder="/local/images/zone.jpg"
-                    @change="${(event) => this._onInput("image", event)}"
-                  />
+                  ${this._renderImagePicker("Image de fond", "image", "/local/images/zone.jpg")}
                 `}
 
-            <label>Couleur d'accent HA (token ou hex)</label>
-            <input
-              .value="${this.config.color || ""}"
-              placeholder="primary, blue, #00AEEF"
-              @change="${(event) => this._onInput("color", event)}"
-            />
+            ${this._renderColorField("Couleur d'accent HA", "color", "#03A9F4")}
 
             <label>
               <input
@@ -3454,6 +3630,23 @@ class AlphaAreaCardEditor extends LitElement {
       .color-field {
         display: grid;
         gap: 6px;
+      }
+
+      .picker-field {
+        display: grid;
+        gap: 6px;
+      }
+
+      .native-picker,
+      ha-selector,
+      ha-picture-upload {
+        display: block;
+        width: 100%;
+        min-width: 0;
+      }
+
+      .image-picker {
+        --file-upload-image-border-radius: 8px;
       }
 
       .action-block {

@@ -19,10 +19,10 @@ Combinez image, capteurs et commandes dans un composant lisible, mobile-first et
 
 - ajout Lovelace vierge: aucun salon/cuisine/exemple n'est injecte par defaut
 - prise en charge native des zones Home Assistant
-- editeur graphique integre avec sections `General`, `Entites` et `Apparence`
+- editeur graphique integre avec sections `General`, `Entites` et `Apparence`, avec pickers natifs Home Assistant pour icones, images et couleurs
 - affichage optimise des capteurs, alertes, toggles et entites secondaires
 - options modernes de l'Area card: `display_type`, `camera_view`, `aspect_ratio`, `color`, `sensor_classes`, `alert_classes`, `features_position`
-- largeur full width par defaut, hauteur precise configurable avec `height` et coins reglables avec `styles.border_radius`
+- largeur full width par defaut, hauteur precise configurable avec `height` et coins/image arrondis via `styles.border_radius`
 - icones d'entites resolues depuis la config, Home Assistant, le registre, puis le domaine/device_class
 - positionnement precis des entites: bas/haut gauche, centre, droite ou droite du titre
 - affichage par entite en bouton, texte ou icone seule, avec couleurs active/inactive
@@ -133,6 +133,8 @@ features_position: inline
 - title: titre affiche sur la carte
 - area: identifiant de zone Home Assistant
 - display_type: rendu `picture`, `camera`, `icon` ou `compact`
+- icon: icone de carte/zone surchargeable depuis l'editeur
+- image: image de fond (`/local/...`, URL ou image choisie depuis le picker media Home Assistant)
 - camera_entity: camera forcee pour le mode `camera` (sinon premiere camera de la zone)
 - camera_view: conserve la syntaxe HA (`auto` ou `live`); le rendu custom utilise le snapshot `camera_proxy`
 - aspect_ratio: ratio stable (`16:9`, `16x9`, `56.25%`, etc.)
@@ -190,7 +192,7 @@ Les positions automatiques restent compatibles: capteurs en haut gauche, medias 
 
 ## 🛠️ Editeur graphique
 
-La carte expose un editeur natif dans le picker Lovelace. La section `Apparence` gere uniquement le rendu de la carte: taille, ratio, image/camera, arrondi, flou et titre. La section `Entites` contient la liste et le reglage detaille de chaque entite, avec position, couleurs, actions et badge.
+La carte expose un editeur natif dans le picker Lovelace. La section `Apparence` gere uniquement le rendu de la carte: taille, ratio, image/camera, arrondi, flou et titre. La section `Entites` contient la liste et le reglage detaille de chaque entite, avec position, couleurs, actions et badge. Les champs d'icones, d'images et de couleurs utilisent des pickers Home Assistant avec un champ texte de secours pour les valeurs YAML avancees.
 
 ## 🧱 Build local
 
