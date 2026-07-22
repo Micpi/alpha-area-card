@@ -723,9 +723,13 @@ class AlphaAreaCard extends HTMLElement {
     this._boundOnCardClick = this._onCardClick.bind(this)
     this._boundOnCardDoubleClick = this._onCardDoubleClick.bind(this)
     this._boundOnCardContextMenu = this._onCardContextMenu.bind(this)
+    this._boundOnCardPointerDown = this._onCardPointerDown.bind(this)
+    this._boundOnCardPointerEnd = this._onCardPointerEnd.bind(this)
     this._boundOnEntityClick = this._onEntityClick.bind(this)
     this._boundOnEntityDoubleClick = this._onEntityDoubleClick.bind(this)
     this._boundOnEntityContextMenu = this._onEntityContextMenu.bind(this)
+    this._boundOnEntityPointerDown = this._onEntityPointerDown.bind(this)
+    this._boundOnEntityPointerEnd = this._onEntityPointerEnd.bind(this)
   }
 
   setConfig(config) {
@@ -829,26 +833,34 @@ class AlphaAreaCard extends HTMLElement {
   }
 
   getCardSize() {
-    return this._getGridRows()
+    return this._getGridRows(50, 16)
   }
 
   getGridOptions() {
+    const rows = this._getGridRows(56, 12)
     return {
       columns: 12,
       min_columns: 12,
       max_columns: 12,
-      rows: this._getGridRows(),
+      rows,
       min_rows: 1,
     }
   }
 
-  _getGridRows() {
+  _getGridRows(rowHeight = 56, reserve = 0) {
     const configuredHeight = normalizeCssSize(this.config?.height)
     const pixelHeight = getPixelHeightFromCssSize(configuredHeight)
     if (pixelHeight) {
-      return Math.max(1, Math.ceil(pixelHeight / 56))
+      return Math.max(1, Math.ceil((pixelHeight + reserve) / rowHeight))
     }
-    return this.config?.display_type === "compact" ? 2 : 3
+
+    if (this.config?.display_type === "compact") {
+      return 2
+    }
+    if (this.config?.display_type === "icon") {
+      return 3
+    }
+    return 5
   }
 
   _shouldRefresh(previousHass, nextHass) {
@@ -1300,7 +1312,31 @@ class AlphaAreaCard extends HTMLElement {
     return value ? "brightness(0.62)" : "brightness(0.96)"
   }
 
-  _onCardClick() {
+  _isEntityInteraction(event) {
+    const path = typeof event?.composedPath === "function" ? event.composedPath() : []
+    if (path.some((node) => node?.classList?.contains?.("entity"))) {
+      return true
+    }
+    return Boolean(event?.target?.closest?.("button.entity"))
+  }
+
+  _onCardPointerDown(event) {
+    if (event?.button > 0 || this._isEntityInteraction(event)) {
+      return
+    }
+    event.currentTarget?.classList?.add("is-pressing")
+  }
+
+  _onCardPointerEnd(event) {
+    event?.currentTarget?.classList?.remove("is-pressing")
+    this.shadowRoot?.querySelector("ha-card")?.classList?.remove("is-pressing")
+  }
+
+  _onCardClick(event) {
+    if (this._isEntityInteraction(event)) {
+      return
+    }
+
     if (this._cardClickTimer) {
       clearTimeout(this._cardClickTimer)
     }
@@ -1312,6 +1348,10 @@ class AlphaAreaCard extends HTMLElement {
   }
 
   _onCardDoubleClick(event) {
+    if (this._isEntityInteraction(event)) {
+      return
+    }
+
     event.preventDefault()
     if (this._cardClickTimer) {
       clearTimeout(this._cardClickTimer)
@@ -1321,6 +1361,10 @@ class AlphaAreaCard extends HTMLElement {
   }
 
   _onCardContextMenu(event) {
+    if (this._isEntityInteraction(event)) {
+      return
+    }
+
     event.preventDefault()
     if (this._cardClickTimer) {
       clearTimeout(this._cardClickTimer)
@@ -1339,8 +1383,24 @@ class AlphaAreaCard extends HTMLElement {
     performAction(this, this._hass, this.config, actionConfig)
   }
 
-  _onEntityClick(event) {
+  _stopEntityEvent(event) {
     event.stopPropagation()
+    event.stopImmediatePropagation?.()
+  }
+
+  _onEntityPointerDown(event) {
+    this._stopEntityEvent(event)
+    event.currentTarget?.classList?.add("is-pressing")
+    this.shadowRoot?.querySelector("ha-card")?.classList?.remove("is-pressing")
+  }
+
+  _onEntityPointerEnd(event) {
+    this._stopEntityEvent(event)
+    event.currentTarget?.classList?.remove("is-pressing")
+  }
+
+  _onEntityClick(event) {
+    this._stopEntityEvent(event)
 
     if (!this._hass) {
       return
@@ -1370,7 +1430,7 @@ class AlphaAreaCard extends HTMLElement {
   }
 
   _onEntityDoubleClick(event) {
-    event.stopPropagation()
+    this._stopEntityEvent(event)
     event.preventDefault()
 
     const entityId = event.currentTarget?.dataset?.entityId
@@ -1393,7 +1453,7 @@ class AlphaAreaCard extends HTMLElement {
   }
 
   _onEntityContextMenu(event) {
-    event.stopPropagation()
+    this._stopEntityEvent(event)
     event.preventDefault()
 
     const entityId = event.currentTarget?.dataset?.entityId
@@ -1593,7 +1653,7 @@ class AlphaAreaCard extends HTMLElement {
     const badgeHtml = this._renderEntityBadge(entityConfig, displayState)
 
     return `
-      <button class=\"entity entity--${displayMode} ${asSensorLine ? "sensor" : "action"} ${entityConfig.alert ? "alert" : ""} ${isOn ? "is-on" : ""}\" data-entity-id=\"${escapeAttribute(entityConfig.entity)}\" title=\"${escapeAttribute(title)}\" style=\"${escapeAttribute(buttonStyle)}\"${stateColorAttr}>
+      <button type=\"button\" class=\"entity entity--${displayMode} ${asSensorLine ? "sensor" : "action"} ${entityConfig.alert ? "alert" : ""} ${isOn ? "is-on" : ""}\" data-entity-id=\"${escapeAttribute(entityConfig.entity)}\" title=\"${escapeAttribute(title)}\" style=\"${escapeAttribute(buttonStyle)}\"${stateColorAttr}>
         <ha-icon icon=\"${escapeAttribute(icon)}\" class=\"entity-icon\"></ha-icon>
         ${labelText ? `<span class=\"entity-label\">${escapeHtml(labelText)}</span>` : ""}
         ${sensorHtml}
@@ -1950,13 +2010,17 @@ class AlphaAreaCard extends HTMLElement {
           --mac-card-height: ${cardHeight};
           --mac-aspect-ratio: ${aspectRatio};
           width: 100%;
+          max-width: 100%;
           min-width: 0;
+          box-sizing: border-box;
         }
 
         ha-card {
           position: relative;
           overflow: hidden;
           width: 100%;
+          max-width: 100%;
+          min-width: 0;
           box-sizing: border-box;
           border-radius: var(--mac-card-border-radius, var(--ha-card-border-radius, 16px));
           background: var(--card-background-color, #1f2937);
@@ -1983,7 +2047,7 @@ class AlphaAreaCard extends HTMLElement {
           outline-offset: 2px;
         }
 
-        ha-card:active {
+        ha-card.is-pressing {
           transform: scale(0.996);
         }
 
@@ -2141,8 +2205,17 @@ class AlphaAreaCard extends HTMLElement {
           outline-offset: 2px;
         }
 
-        .entity:active {
+        .entity:active,
+        .entity.is-pressing {
           transform: scale(0.97);
+        }
+
+        .entity.is-pressing {
+          background: var(--mac-entity-background-pressed, rgba(17, 24, 39, 0.58));
+        }
+
+        .entity.is-on.is-pressing {
+          background: var(--mac-entity-background-on, rgba(17, 24, 39, 0.48));
         }
 
         .entity.is-on {
@@ -2323,18 +2396,34 @@ class AlphaAreaCard extends HTMLElement {
       cardNode.removeEventListener("click", this._boundOnCardClick)
       cardNode.removeEventListener("dblclick", this._boundOnCardDoubleClick)
       cardNode.removeEventListener("contextmenu", this._boundOnCardContextMenu)
+      cardNode.removeEventListener("pointerdown", this._boundOnCardPointerDown)
+      cardNode.removeEventListener("pointerup", this._boundOnCardPointerEnd)
+      cardNode.removeEventListener("pointercancel", this._boundOnCardPointerEnd)
+      cardNode.removeEventListener("pointerleave", this._boundOnCardPointerEnd)
       cardNode.addEventListener("click", this._boundOnCardClick)
       cardNode.addEventListener("dblclick", this._boundOnCardDoubleClick)
       cardNode.addEventListener("contextmenu", this._boundOnCardContextMenu)
+      cardNode.addEventListener("pointerdown", this._boundOnCardPointerDown)
+      cardNode.addEventListener("pointerup", this._boundOnCardPointerEnd)
+      cardNode.addEventListener("pointercancel", this._boundOnCardPointerEnd)
+      cardNode.addEventListener("pointerleave", this._boundOnCardPointerEnd)
     }
 
     this.shadowRoot.querySelectorAll("button.entity").forEach((button) => {
       button.removeEventListener("click", this._boundOnEntityClick)
       button.removeEventListener("dblclick", this._boundOnEntityDoubleClick)
       button.removeEventListener("contextmenu", this._boundOnEntityContextMenu)
+      button.removeEventListener("pointerdown", this._boundOnEntityPointerDown)
+      button.removeEventListener("pointerup", this._boundOnEntityPointerEnd)
+      button.removeEventListener("pointercancel", this._boundOnEntityPointerEnd)
+      button.removeEventListener("pointerleave", this._boundOnEntityPointerEnd)
       button.addEventListener("click", this._boundOnEntityClick)
       button.addEventListener("dblclick", this._boundOnEntityDoubleClick)
       button.addEventListener("contextmenu", this._boundOnEntityContextMenu)
+      button.addEventListener("pointerdown", this._boundOnEntityPointerDown)
+      button.addEventListener("pointerup", this._boundOnEntityPointerEnd)
+      button.addEventListener("pointercancel", this._boundOnEntityPointerEnd)
+      button.addEventListener("pointerleave", this._boundOnEntityPointerEnd)
     })
   }
 }
