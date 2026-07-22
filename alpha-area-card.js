@@ -219,7 +219,6 @@ const DEFAULT_CONFIG = {
   title: "",
   area: "",
   display_type: "picture",
-  camera_view: "auto",
   camera_entity: "",
   aspect_ratio: "16:9",
   height: "",
@@ -235,21 +234,6 @@ const DEFAULT_CONFIG = {
   features: [],
   features_position: "bottom",
   max_entities: 0,
-  tap_action: {
-    action: "none",
-  },
-  hold_action: {
-    action: "none",
-  },
-  double_tap_action: {
-    action: "none",
-  },
-  entity_hold_action: {
-    action: "more-info",
-  },
-  entity_double_tap_action: {
-    action: "none",
-  },
   entities: [],
   entity_defaults: { ...ENTITY_DEFAULTS },
   styles: { ...STYLE_DEFAULTS },
@@ -258,6 +242,16 @@ const DEFAULT_CONFIG = {
   force_dialog: false,
   state_color: false,
 }
+
+const LEGACY_CONFIG_KEYS = new Set([
+  "camera_image",
+  "camera_view",
+  "tap_action",
+  "hold_action",
+  "double_tap_action",
+  "entity_hold_action",
+  "entity_double_tap_action",
+])
 
 const safeText = (value) => (value === null || value === undefined ? "" : String(value))
 
@@ -435,7 +429,8 @@ const normalizeImageSourceValue = (value) => {
   }
 
   if (typeof value === "string") {
-    return safeText(value).trim()
+    const text = safeText(value).trim()
+    return getImageServePath(text) || text
   }
 
   if (typeof value !== "object") {
@@ -447,6 +442,9 @@ const normalizeImageSourceValue = (value) => {
   const direct = value.url || value.path || value.image || mediaContentId
   return getImageServePath(direct) || getImageServePath(thumbnail) || safeText(thumbnail || direct).trim()
 }
+
+const isNativeBrowserImageUrl = (value) =>
+  /^(?:https?:)?\/\//i.test(value) || /^(?:data|blob):/i.test(value)
 
 const normalizeActionConfig = (actionConfig, fallbackAction = "more-info") => {
   if (!actionConfig || typeof actionConfig !== "object") {
@@ -733,13 +731,7 @@ class AlphaAreaCard extends HTMLElement {
       cameraEntity: "",
     }
     this._lastStateSnapshot = ""
-    this._cardClickTimer = null
     this._entityClickTimers = new Map()
-    this._boundOnCardClick = this._onCardClick.bind(this)
-    this._boundOnCardDoubleClick = this._onCardDoubleClick.bind(this)
-    this._boundOnCardContextMenu = this._onCardContextMenu.bind(this)
-    this._boundOnCardPointerDown = this._onCardPointerDown.bind(this)
-    this._boundOnCardPointerEnd = this._onCardPointerEnd.bind(this)
     this._boundOnEntityClick = this._onEntityClick.bind(this)
     this._boundOnEntityDoubleClick = this._onEntityDoubleClick.bind(this)
     this._boundOnEntityContextMenu = this._onEntityContextMenu.bind(this)
@@ -755,30 +747,14 @@ class AlphaAreaCard extends HTMLElement {
         ...deepClone(DEFAULT_CONFIG.styles),
         ...(config?.styles || {}),
       },
-      tap_action: {
-        ...deepClone(DEFAULT_CONFIG.tap_action),
-        ...(config?.tap_action || {}),
-      },
-      hold_action: {
-        ...deepClone(DEFAULT_CONFIG.hold_action),
-        ...(config?.hold_action || {}),
-      },
-      double_tap_action: {
-        ...deepClone(DEFAULT_CONFIG.double_tap_action),
-        ...(config?.double_tap_action || {}),
-      },
-      entity_hold_action: {
-        ...deepClone(DEFAULT_CONFIG.entity_hold_action),
-        ...(config?.entity_hold_action || {}),
-      },
-      entity_double_tap_action: {
-        ...deepClone(DEFAULT_CONFIG.entity_double_tap_action),
-        ...(config?.entity_double_tap_action || {}),
-      },
       entity_defaults: {
         ...deepClone(DEFAULT_CONFIG.entity_defaults),
         ...(config?.entity_defaults || {}),
       },
+    }
+
+    for (const key of LEGACY_CONFIG_KEYS) {
+      delete merged[key]
     }
 
     if (merged.entities && !Array.isArray(merged.entities)) {
@@ -807,7 +783,7 @@ class AlphaAreaCard extends HTMLElement {
       "bottom"
     )
     merged.features = Array.isArray(merged.features) ? merged.features.filter(Boolean) : []
-    merged.camera_entity = safeText(merged.camera_entity || merged.camera_image)
+    merged.camera_entity = safeText(merged.camera_entity)
     merged.image = normalizeImageSourceValue(merged.image)
     merged.height = normalizeCssSize(merged.height)
     merged.styles.border_radius = normalizeCssSize(merged.styles.border_radius, "16px")
@@ -1149,7 +1125,7 @@ class AlphaAreaCard extends HTMLElement {
   }
 
   _resolveCameraEntity(areaEntityIds, parsedEntities) {
-    const configured = safeText(this.config.camera_entity || this.config.camera_image)
+    const configured = safeText(this.config.camera_entity)
     if (configured.startsWith("camera.")) {
       return configured
     }
@@ -1268,8 +1244,21 @@ class AlphaAreaCard extends HTMLElement {
       return ""
     }
 
+    return this._resolveImageUrl(selected)
+  }
+
+  _resolveImageUrl(value) {
+    const selected = normalizeImageSourceValue(value)
+    if (!selected) {
+      return ""
+    }
+
+    if (selected.startsWith("/") || isNativeBrowserImageUrl(selected)) {
+      return selected
+    }
+
     try {
-      return new URL(selected, hass.auth?.data?.hassUrl || window.location.origin).toString()
+      return new URL(selected, window.location.href).toString()
     } catch (_error) {
       return selected
     }
@@ -1280,15 +1269,9 @@ class AlphaAreaCard extends HTMLElement {
       return ""
     }
 
-    const baseUrl = this._hass?.auth?.data?.hassUrl || window.location.origin
     const cameraState = this._hass?.states?.[entityId]
     const cacheKey = encodeURIComponent(cameraState?.last_updated || cameraState?.last_changed || "")
-
-    try {
-      return new URL(`/api/camera_proxy/${entityId}?t=${cacheKey}`, baseUrl).toString()
-    } catch (_error) {
-      return `/api/camera_proxy/${entityId}?t=${cacheKey}`
-    }
+    return `/api/camera_proxy/${entityId}?t=${cacheKey}`
   }
 
   _getAreaIcon() {
@@ -1316,84 +1299,26 @@ class AlphaAreaCard extends HTMLElement {
     return width > 0 && height > 0 ? `${width} / ${height}` : "16 / 9"
   }
 
-  _getDarkenFilter() {
+  _getImageFilter(styles = {}) {
+    const blur = normalizeCssSize(styles.image_blur, "0px")
+    if (!blur || /^0(?:\.0+)?(?:px|rem|em|vh|svh|lvh|dvh|vw|vmin|vmax|%)?$/i.test(blur)) {
+      return "none"
+    }
+    return `blur(${blur})`
+  }
+
+  _getOverlayBackground() {
     const value = this.config.darken_image
-    if (typeof value === "number") {
-      const brightness = Math.max(0.2, Math.min(1, 1 - value))
-      return `brightness(${brightness})`
-    }
-    return value ? "brightness(0.62)" : "brightness(0.96)"
-  }
+    const strength =
+      typeof value === "number"
+        ? Math.max(0, Math.min(0.82, value))
+        : value
+          ? 0.58
+          : 0.16
+    const top = Math.max(0.02, strength * 0.15).toFixed(2)
+    const bottom = strength.toFixed(2)
 
-  _isEntityInteraction(event) {
-    const path = typeof event?.composedPath === "function" ? event.composedPath() : []
-    if (path.some((node) => node?.classList?.contains?.("entity"))) {
-      return true
-    }
-    return Boolean(event?.target?.closest?.("button.entity"))
-  }
-
-  _onCardPointerDown(event) {
-    if (event?.button > 0 || this._isEntityInteraction(event)) {
-      return
-    }
-    event.currentTarget?.classList?.add("is-pressing")
-  }
-
-  _onCardPointerEnd(event) {
-    event?.currentTarget?.classList?.remove("is-pressing")
-    this.shadowRoot?.querySelector("ha-card")?.classList?.remove("is-pressing")
-  }
-
-  _onCardClick(event) {
-    if (this._isEntityInteraction(event)) {
-      return
-    }
-
-    if (this._cardClickTimer) {
-      clearTimeout(this._cardClickTimer)
-    }
-
-    this._cardClickTimer = window.setTimeout(() => {
-      this._runCardAction("tap_action")
-      this._cardClickTimer = null
-    }, 220)
-  }
-
-  _onCardDoubleClick(event) {
-    if (this._isEntityInteraction(event)) {
-      return
-    }
-
-    event.preventDefault()
-    if (this._cardClickTimer) {
-      clearTimeout(this._cardClickTimer)
-      this._cardClickTimer = null
-    }
-    this._runCardAction("double_tap_action")
-  }
-
-  _onCardContextMenu(event) {
-    if (this._isEntityInteraction(event)) {
-      return
-    }
-
-    event.preventDefault()
-    if (this._cardClickTimer) {
-      clearTimeout(this._cardClickTimer)
-      this._cardClickTimer = null
-    }
-    this._runCardAction("hold_action")
-  }
-
-  _runCardAction(actionKey) {
-    if (!this._hass || !this.config) {
-      return
-    }
-
-    const fallbackAction = actionKey === "tap_action" ? "more-info" : "none"
-    const actionConfig = normalizeActionConfig(this.config[actionKey], fallbackAction)
-    performAction(this, this._hass, this.config, actionConfig)
+    return `linear-gradient(180deg, rgba(15, 23, 42, ${top}) 0%, rgba(15, 23, 42, ${bottom}) 82%)`
   }
 
   _stopEntityEvent(event) {
@@ -1405,7 +1330,6 @@ class AlphaAreaCard extends HTMLElement {
     this._stopEntityEvent(event)
     event.currentTarget?.focus?.({ preventScroll: true })
     event.currentTarget?.classList?.add("is-pressing")
-    this.shadowRoot?.querySelector("ha-card")?.classList?.remove("is-pressing")
   }
 
   _onEntityPointerEnd(event) {
@@ -1511,11 +1435,11 @@ class AlphaAreaCard extends HTMLElement {
     }
 
     if (actionKey === "hold_action") {
-      return this.config.entity_hold_action || { action: "more-info" }
+      return { action: "more-info" }
     }
 
     if (actionKey === "double_tap_action") {
-      return this.config.entity_double_tap_action || { action: "none" }
+      return { action: "none" }
     }
 
     return { action: "none" }
@@ -1935,8 +1859,9 @@ class AlphaAreaCard extends HTMLElement {
     const defaultHeight = compact ? "112px" : displayType === "icon" ? "140px" : "180px"
     const cardHeight = configuredHeight || defaultHeight
     const fixedHeight = Boolean(configuredHeight)
-    const darkenFilter = this._getDarkenFilter()
     const styles = this.config.styles || {}
+    const imageFilter = this._getImageFilter(styles)
+    const overlayBackground = this._getOverlayBackground()
     const entityBuckets = this._makePositionBuckets()
     const addEntity = (entity, asSensorLine, fallbackPosition) => {
       const position = this._getEntityPosition(entity, fallbackPosition)
@@ -1983,7 +1908,8 @@ class AlphaAreaCard extends HTMLElement {
       aspectRatio,
       cardHeight,
       fixedHeight,
-      darkenFilter,
+      imageFilter,
+      overlayBackground,
       entitySnapshot,
       vars: this._computeCardCssVariables(),
       stateColor: Boolean(this.config.state_color),
@@ -2050,14 +1976,9 @@ class AlphaAreaCard extends HTMLElement {
           display: flex;
           flex-direction: column;
           justify-content: stretch;
-          cursor: pointer;
-          transition: transform 160ms ease, box-shadow 160ms ease;
+          transition: box-shadow 160ms ease;
           border: 1px solid color-mix(in srgb, var(--divider-color, rgba(148, 163, 184, 0.28)) 70%, transparent);
           ${cardStyle}
-        }
-
-        ha-card.is-pressing {
-          transform: scale(0.996);
         }
 
         .bg {
@@ -2066,24 +1987,24 @@ class AlphaAreaCard extends HTMLElement {
           z-index: 0;
           pointer-events: none;
           overflow: hidden;
-          border-radius: var(--mac-card-border-radius, var(--ha-card-border-radius, 16px));
-          clip-path: inset(0 round var(--mac-card-border-radius, var(--ha-card-border-radius, 16px)));
+          border-radius: inherit;
         }
 
         .bg img {
+          display: block;
           width: 100%;
           height: 100%;
           object-fit: cover;
-          filter: blur(var(--mac-image-blur)) ${darkenFilter};
-          transform: scale(1.04);
+          filter: ${imageFilter};
+          transform: ${imageFilter === "none" ? "none" : "scale(1.04)"};
         }
 
         .overlay {
           position: absolute;
           inset: 0;
-          border-radius: var(--mac-card-border-radius, var(--ha-card-border-radius, 16px));
-          clip-path: inset(0 round var(--mac-card-border-radius, var(--ha-card-border-radius, 16px)));
-          background: linear-gradient(180deg, rgba(15, 23, 42, 0.08) 0%, rgba(15, 23, 42, 0.58) 82%);
+          pointer-events: none;
+          border-radius: inherit;
+          background: ${overlayBackground};
         }
 
         .content {
@@ -2396,24 +2317,6 @@ class AlphaAreaCard extends HTMLElement {
       </ha-card>
     `
 
-    const cardNode = this.shadowRoot.querySelector("ha-card")
-    if (cardNode) {
-      cardNode.removeEventListener("click", this._boundOnCardClick)
-      cardNode.removeEventListener("dblclick", this._boundOnCardDoubleClick)
-      cardNode.removeEventListener("contextmenu", this._boundOnCardContextMenu)
-      cardNode.removeEventListener("pointerdown", this._boundOnCardPointerDown)
-      cardNode.removeEventListener("pointerup", this._boundOnCardPointerEnd)
-      cardNode.removeEventListener("pointercancel", this._boundOnCardPointerEnd)
-      cardNode.removeEventListener("pointerleave", this._boundOnCardPointerEnd)
-      cardNode.addEventListener("click", this._boundOnCardClick)
-      cardNode.addEventListener("dblclick", this._boundOnCardDoubleClick)
-      cardNode.addEventListener("contextmenu", this._boundOnCardContextMenu)
-      cardNode.addEventListener("pointerdown", this._boundOnCardPointerDown)
-      cardNode.addEventListener("pointerup", this._boundOnCardPointerEnd)
-      cardNode.addEventListener("pointercancel", this._boundOnCardPointerEnd)
-      cardNode.addEventListener("pointerleave", this._boundOnCardPointerEnd)
-    }
-
     this.shadowRoot.querySelectorAll("button.entity").forEach((button) => {
       button.removeEventListener("click", this._boundOnEntityClick)
       button.removeEventListener("dblclick", this._boundOnEntityDoubleClick)
@@ -2453,30 +2356,14 @@ class AlphaAreaCardEditor extends LitElement {
         ...DEFAULT_CONFIG.styles,
         ...(incoming.styles || {}),
       },
-      tap_action: {
-        ...DEFAULT_CONFIG.tap_action,
-        ...(incoming.tap_action || {}),
-      },
-      hold_action: {
-        ...DEFAULT_CONFIG.hold_action,
-        ...(incoming.hold_action || {}),
-      },
-      double_tap_action: {
-        ...DEFAULT_CONFIG.double_tap_action,
-        ...(incoming.double_tap_action || {}),
-      },
-      entity_hold_action: {
-        ...DEFAULT_CONFIG.entity_hold_action,
-        ...(incoming.entity_hold_action || {}),
-      },
-      entity_double_tap_action: {
-        ...DEFAULT_CONFIG.entity_double_tap_action,
-        ...(incoming.entity_double_tap_action || {}),
-      },
       entity_defaults: {
         ...DEFAULT_CONFIG.entity_defaults,
         ...(incoming.entity_defaults || {}),
       },
+    }
+
+    for (const key of LEGACY_CONFIG_KEYS) {
+      delete this.config[key]
     }
     this.config.display_type = normalizeSelect(this.config.display_type, DISPLAY_TYPES, "picture")
     this.config.features_position = normalizeSelect(
@@ -2521,6 +2408,10 @@ class AlphaAreaCardEditor extends LitElement {
     const cleaned = {}
 
     for (const [key, value] of Object.entries(config || {})) {
+      if (LEGACY_CONFIG_KEYS.has(key)) {
+        continue
+      }
+
       if (key === "styles") {
         const styles = this._pruneObject(value, DEFAULT_CONFIG.styles)
         if (Object.keys(styles).length) {

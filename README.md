@@ -21,7 +21,7 @@ Combinez image, capteurs et commandes dans un composant lisible, mobile-first et
 - prise en charge native des zones Home Assistant
 - editeur graphique integre avec sections `General`, `Entites` et `Apparence`, avec pickers natifs Home Assistant pour icones, images et couleurs
 - affichage optimise des capteurs, alertes, toggles et entites secondaires
-- options modernes de l'Area card: `display_type`, `camera_view`, `aspect_ratio`, `color`, `sensor_classes`, `alert_classes`, `features_position`
+- options modernes de l'Area card: `display_type`, `aspect_ratio`, `color`, `sensor_classes`, `alert_classes`, `features_position`
 - largeur full width par defaut, hauteur precise configurable avec `height` et coins/image arrondis via `styles.border_radius`
 - hauteur automatique en vue Sections: la carte ne force pas de lignes de grille afin d'eviter les gaps sous la carte
 - hauteur stable entre mobile et navigateur: sans `height`, chaque mode utilise une hauteur par defaut fixe; avec `vh`, la valeur est stabilisee sur une reference commune
@@ -77,7 +77,6 @@ area: salon
 hide_unavailable: true
 display_type: camera
 camera_entity: camera.salon
-camera_view: auto
 aspect_ratio: 16:9
 height: 220px
 color: primary
@@ -139,8 +138,7 @@ features_position: inline
 - icon: icone de carte/zone surchargeable depuis l'editeur
 - image: image de fond (`/local/...`, URL ou image choisie depuis le picker media Home Assistant)
 - camera_entity: camera forcee pour le mode `camera` (sinon premiere camera de la zone)
-- camera_view: conserve la syntaxe HA (`auto` ou `live`); le rendu custom utilise le snapshot `camera_proxy`
-- aspect_ratio: option conservee pour compatibilite; la hauteur visuelle reste pilotee par `height`
+- aspect_ratio: ratio visuel de reference pour l'image; la hauteur finale reste pilotee par `height`
 - height: hauteur fixe optionnelle (`220`, `220px`, `24rem`, `20vh`); les valeurs `vh` sont stabilisees (`20vh` = `180px`) pour rester coherentes entre mobile et navigateur
 - styles.border_radius: arrondi de la carte (`0`, `12px`, `1rem`, etc.)
 - styles.title_font_size: taille du texte du titre (`18px`, `1.3rem`, etc.)
@@ -163,13 +161,10 @@ features_position: inline
 - shadow: active l'ombre de carte
 - force_dialog: force l'ouverture du detail de zone
 - state_color: applique les couleurs d'etat Home Assistant
-- card_mod.style: surcharge CSS si card-mod est utilise
-
-Les actions de carte globales restent compatibles en YAML (`tap_action`, `hold_action`, `double_tap_action`), mais l'editeur graphique privilegie les actions configurees dans chaque entite.
 
 ## 🎛️ Personnalisation des entites
 
-Chaque entree de `entities` peut rester une chaine simple ou devenir un objet detaille.
+Chaque entree de `entities` peut etre configuree comme un objet detaille.
 
 - position: `bottom-left`, `bottom-center`, `bottom-right`, `top-left`, `top-center`, `top-right`, `title-right`
 - display_mode: `button`, `text`, `icon`
@@ -192,7 +187,7 @@ Chaque entree de `entities` peut rester une chaine simple ou devenir un objet de
 
 Pour un groupe de lumieres, utilisez par exemple `badge_entity: light.groupe_lumieres`, `badge_mode: count_on` et `badge_show_when: nonzero` pour afficher uniquement le nombre de lumieres allumees.
 
-Les positions automatiques restent compatibles: capteurs en haut gauche, medias en bas gauche, toggles et entites secondaires en bas droite, alertes ou feature inline a droite du titre.
+Les positions automatiques par defaut placent les capteurs en haut gauche, les medias en bas gauche, les toggles et entites secondaires en bas droite, et les alertes ou feature inline a droite du titre.
 
 ## 🛠️ Editeur graphique
 
