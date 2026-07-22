@@ -83,6 +83,7 @@ height: 220px
 color: primary
 styles:
   title_color: "#ffffff"
+  title_font_size: 1.3rem
   title_effect: neon
   border_radius: 22px
 entity_defaults:
@@ -142,6 +143,7 @@ features_position: inline
 - aspect_ratio: option conservee pour compatibilite; la hauteur visuelle reste pilotee par `height`
 - height: hauteur fixe optionnelle (`220`, `220px`, `24rem`, `20vh`); les valeurs `vh` sont stabilisees (`20vh` = `180px`) pour rester coherentes entre mobile et navigateur
 - styles.border_radius: arrondi de la carte (`0`, `12px`, `1rem`, etc.)
+- styles.title_font_size: taille du texte du titre (`18px`, `1.3rem`, etc.)
 - color: token Home Assistant ou couleur hex pour l'accent
 - auto_area_entities: auto-remplissage depuis la zone quand la liste d'entites est vide
 - entities: entites secondaires affichees dans la carte

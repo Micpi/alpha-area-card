@@ -190,6 +190,7 @@ const STYLE_DEFAULTS = {
   badge_background: "var(--primary-color, #00AEEF)",
   title_color: "var(--primary-text-color, #f8fafc)",
   title_effect: "shadow",
+  title_font_size: "1.3rem",
   title_font_weight: "600",
   title_text_transform: "none",
   title_text_shadow: "",
@@ -810,6 +811,7 @@ class AlphaAreaCard extends HTMLElement {
     merged.image = normalizeImageSourceValue(merged.image)
     merged.height = normalizeCssSize(merged.height)
     merged.styles.border_radius = normalizeCssSize(merged.styles.border_radius, "16px")
+    merged.styles.title_font_size = normalizeCssSize(merged.styles.title_font_size, "1.3rem")
     merged.styles.title_effect = normalizeTitleEffect(merged.styles.title_effect, "shadow")
     merged.entity_defaults.position = normalizeEntityPosition(merged.entity_defaults.position, "")
     merged.entity_defaults.display_mode = normalizeEntityDisplayMode(
@@ -1885,6 +1887,7 @@ class AlphaAreaCard extends HTMLElement {
       "--mac-badge-background": styles.badge_background,
       "--mac-title-color": styles.title_color,
       "--mac-title-effect": styles.title_effect,
+      "--mac-title-font-size": normalizeCssSize(styles.title_font_size, "1.3rem"),
       "--mac-title-font-weight": styles.title_font_weight,
       "--mac-title-text-transform": styles.title_text_transform,
       "--mac-title-text-shadow": styles.title_text_shadow,
@@ -2015,6 +2018,7 @@ class AlphaAreaCard extends HTMLElement {
           --mac-button-light-color-on: ${STYLE_DEFAULTS.button_light_color_on};
           --mac-badge-background: ${STYLE_DEFAULTS.badge_background};
           --mac-title-color: ${STYLE_DEFAULTS.title_color};
+          --mac-title-font-size: ${STYLE_DEFAULTS.title_font_size};
           --mac-title-font-weight: ${STYLE_DEFAULTS.title_font_weight};
           --mac-title-text-transform: ${STYLE_DEFAULTS.title_text_transform};
           --mac-title-text-shadow: ${STYLE_DEFAULTS.title_text_shadow};
@@ -2103,7 +2107,7 @@ class AlphaAreaCard extends HTMLElement {
         }
 
         .title {
-          font-size: 1.3rem;
+          font-size: var(--mac-title-font-size, 1.3rem);
           letter-spacing: 0;
           font-weight: var(--mac-title-font-weight);
           color: var(--mac-title-color);
@@ -2353,10 +2357,6 @@ class AlphaAreaCard extends HTMLElement {
         }
 
         @media (max-width: 600px) {
-          .title {
-            font-size: 1.08rem;
-          }
-
           .entity {
             padding: 5px 7px;
           }
@@ -2487,6 +2487,10 @@ class AlphaAreaCardEditor extends LitElement {
     this.config.image = normalizeImageSourceValue(this.config.image)
     this.config.height = normalizeCssSize(this.config.height)
     this.config.styles.border_radius = normalizeCssSize(this.config.styles.border_radius, "16px")
+    this.config.styles.title_font_size = normalizeCssSize(
+      this.config.styles.title_font_size,
+      "1.3rem"
+    )
     this.config.styles.title_effect = normalizeTitleEffect(this.config.styles.title_effect, "shadow")
     this.config.entity_defaults.position = normalizeEntityPosition(
       this.config.entity_defaults.position,
@@ -3628,6 +3632,13 @@ class AlphaAreaCardEditor extends LitElement {
               />
               Assombrir l'image de fond
             </label>
+
+            <label>Taille du titre</label>
+            <input
+              .value="${this.config.styles?.title_font_size || ""}"
+              placeholder="20px, 1.3rem"
+              @change="${(event) => this._onCssSize("styles.title_font_size", event)}"
+            />
 
             <label>Poids du titre (font-weight)</label>
             <input
