@@ -42,6 +42,7 @@ const ENTITY_BADGE_SHOW_WHEN = ["auto", "always", "active", "on", "nonzero", "st
 const TITLE_EFFECTS = ["none", "shadow", "neon", "outline"]
 const DEFAULT_SENSOR_CLASSES = ["temperature", "humidity"]
 const DEFAULT_ALERT_CLASSES = ["moisture", "motion"]
+const CARD_HEIGHT_VIEWPORT_REFERENCE = 900
 const SUM_SENSOR_CLASSES = new Set(["energy", "gas", "monetary", "power", "volume", "water"])
 const AREA_CONTROL_FEATURE_TYPES = new Set(["area-controls", "area_controls"])
 const INACTIVE_STATES = new Set([
@@ -373,7 +374,7 @@ const normalizeCssSize = (value, fallback = "") => {
     return `${text}px`
   }
 
-  if (/^\d+(?:\.\d+)?(?:px|rem|em|vh|vw|vmin|vmax|%)$/i.test(text)) {
+  if (/^\d+(?:\.\d+)?(?:px|rem|em|vh|svh|lvh|dvh|vw|vmin|vmax|%)$/i.test(text)) {
     return text
   }
 
@@ -387,6 +388,21 @@ const normalizeCssSize = (value, fallback = "") => {
 const getPixelHeightFromCssSize = (value) => {
   const match = safeText(value).trim().match(/^(\d+(?:\.\d+)?)px$/i)
   return match ? Number(match[1]) : 0
+}
+
+const resolveStableCardHeight = (value, fallback = "") => {
+  const normalized = normalizeCssSize(value)
+  if (!normalized) {
+    return fallback
+  }
+
+  const viewportMatch = normalized.match(/^(\d+(?:\.\d+)?)(?:vh|svh|lvh|dvh)$/i)
+  if (!viewportMatch) {
+    return normalized
+  }
+
+  const pixels = (Number(viewportMatch[1]) / 100) * CARD_HEIGHT_VIEWPORT_REFERENCE
+  return Number.isFinite(pixels) && pixels > 0 ? `${Math.round(pixels)}px` : fallback
 }
 
 const getImageServePath = (value) => {
@@ -843,7 +859,7 @@ class AlphaAreaCard extends HTMLElement {
   }
 
   _getCardRows() {
-    const configuredHeight = normalizeCssSize(this.config?.height)
+    const configuredHeight = resolveStableCardHeight(this.config?.height)
     const pixelHeight = getPixelHeightFromCssSize(configuredHeight)
     if (pixelHeight) {
       return Math.max(1, Math.ceil(pixelHeight / 50))
@@ -1912,8 +1928,9 @@ class AlphaAreaCard extends HTMLElement {
     const backgroundImage = this._getBackgroundImage()
     const areaIcon = this._getAreaIcon()
     const aspectRatio = this._getAspectRatioCss()
-    const configuredHeight = normalizeCssSize(this.config.height)
-    const cardHeight = configuredHeight || (compact ? "112px" : "180px")
+    const configuredHeight = resolveStableCardHeight(this.config.height)
+    const defaultHeight = compact ? "112px" : displayType === "icon" ? "140px" : "180px"
+    const cardHeight = configuredHeight || defaultHeight
     const fixedHeight = Boolean(configuredHeight)
     const darkenFilter = this._getDarkenFilter()
     const styles = this.config.styles || {}
@@ -2009,6 +2026,7 @@ class AlphaAreaCard extends HTMLElement {
           max-width: 100%;
           min-width: 0;
           box-sizing: border-box;
+          height: var(--mac-card-height);
         }
 
         ha-card {
@@ -2022,9 +2040,9 @@ class AlphaAreaCard extends HTMLElement {
           background: var(--card-background-color, #1f2937);
           color: var(--primary-text-color, #f8fafc);
           min-height: var(--mac-card-height);
-          max-height: ${fixedHeight ? "var(--mac-card-height)" : "none"};
-          aspect-ratio: ${compact || fixedHeight ? "auto" : "var(--mac-aspect-ratio)"};
-          height: ${fixedHeight ? "var(--mac-card-height)" : "auto"};
+          max-height: var(--mac-card-height);
+          aspect-ratio: auto;
+          height: var(--mac-card-height);
           display: flex;
           flex-direction: column;
           justify-content: stretch;
@@ -2032,10 +2050,6 @@ class AlphaAreaCard extends HTMLElement {
           transition: transform 160ms ease, box-shadow 160ms ease;
           border: 1px solid color-mix(in srgb, var(--divider-color, rgba(148, 163, 184, 0.28)) 70%, transparent);
           ${cardStyle}
-        }
-
-        ha-card.is-compact:not(.has-fixed-height) {
-          min-height: 104px;
         }
 
         ha-card.is-pressing {
@@ -3571,7 +3585,7 @@ class AlphaAreaCardEditor extends LitElement {
             <label>Hauteur fixe de la carte</label>
             <input
               .value="${this.config.height || ""}"
-              placeholder="180px, 22rem, 40vh"
+              placeholder="180px, 20vh (= 180px stable), 22rem"
               @change="${(event) => this._onCssSize("height", event)}"
             />
 

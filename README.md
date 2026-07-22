@@ -24,6 +24,7 @@ Combinez image, capteurs et commandes dans un composant lisible, mobile-first et
 - options modernes de l'Area card: `display_type`, `camera_view`, `aspect_ratio`, `color`, `sensor_classes`, `alert_classes`, `features_position`
 - largeur full width par defaut, hauteur precise configurable avec `height` et coins/image arrondis via `styles.border_radius`
 - hauteur automatique en vue Sections: la carte ne force pas de lignes de grille afin d'eviter les gaps sous la carte
+- hauteur stable entre mobile et navigateur: sans `height`, chaque mode utilise une hauteur par defaut fixe; avec `vh`, la valeur est stabilisee sur une reference commune
 - icones d'entites resolues depuis la config, Home Assistant, le registre, puis le domaine/device_class
 - positionnement precis des entites: bas/haut gauche, centre, droite ou droite du titre
 - affichage par entite en bouton, texte ou icone seule, avec couleurs active/inactive
@@ -138,8 +139,8 @@ features_position: inline
 - image: image de fond (`/local/...`, URL ou image choisie depuis le picker media Home Assistant)
 - camera_entity: camera forcee pour le mode `camera` (sinon premiere camera de la zone)
 - camera_view: conserve la syntaxe HA (`auto` ou `live`); le rendu custom utilise le snapshot `camera_proxy`
-- aspect_ratio: ratio stable (`16:9`, `16x9`, `56.25%`, etc.)
-- height: hauteur fixe optionnelle (`220`, `220px`, `24rem`, `40vh`); si absente, le ratio reste utilise
+- aspect_ratio: option conservee pour compatibilite; la hauteur visuelle reste pilotee par `height`
+- height: hauteur fixe optionnelle (`220`, `220px`, `24rem`, `20vh`); les valeurs `vh` sont stabilisees (`20vh` = `180px`) pour rester coherentes entre mobile et navigateur
 - styles.border_radius: arrondi de la carte (`0`, `12px`, `1rem`, etc.)
 - color: token Home Assistant ou couleur hex pour l'accent
 - auto_area_entities: auto-remplissage depuis la zone quand la liste d'entites est vide
