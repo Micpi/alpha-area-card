@@ -28,7 +28,7 @@ Combinez image, capteurs et commandes dans un composant lisible, mobile-first et
 - icones d'entites resolues depuis la config, Home Assistant, le registre, puis le domaine/device_class
 - positionnement precis des entites: bas/haut gauche, centre, droite ou droite du titre
 - affichage par entite en bouton, texte ou icone seule, avec couleurs active/inactive
-- badge optionnel par entite avec source dediee, visibilite conditionnelle, compteur, texte, icone, position et couleurs propres
+- badge optionnel compact et rond par entite avec source dediee, visibilite conditionnelle, compteur, texte, icone, position et couleurs propres
 - editeur plus fluide: un seul picker d'entite est rendu dans le sous-onglet de reglage actif
 - support `features: [{ type: area-controls }]` avec filtres `controls`
 - actions avancees configurees directement dans chaque entite: `tap_action`, `hold_action`, `double_tap_action`

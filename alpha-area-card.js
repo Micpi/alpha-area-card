@@ -1,9 +1,29 @@
 import { LitElement, html, css } from "https://unpkg.com/lit-element@2.4.0/lit-element.js?module"
 
+/**
+ * Alpha Area Card: carte Lovelace orientee piece, image, entites et badges.
+ * Le fichier est autonome afin de rester simple a publier via HACS.
+ */
+
+/**
+ * Nom du custom element principal declare dans Lovelace.
+ */
 const CARD_TYPE = "alpha-area-card"
+/**
+ * Nom du custom element de l editeur visuel.
+ */
 const CARD_EDITOR_TYPE = "alpha-area-card-editor"
+/**
+ * Etats Home Assistant a ignorer dans les resumes et affichages utiles.
+ */
 const UNAVAILABLE_STATES = new Set(["unknown", "unavailable"])
+/**
+ * Domaines traites comme des lignes de capteurs ou alertes.
+ */
 const SENSOR_DOMAINS = new Set(["sensor", "binary_sensor"])
+/**
+ * Domaines qui peuvent recevoir une action toggle par defaut.
+ */
 const TOGGLE_DOMAINS = new Set([
   "light",
   "switch",
@@ -14,6 +34,9 @@ const TOGGLE_DOMAINS = new Set([
   "automation",
 ])
 
+/**
+ * Actions supportees pour les boutons d entites.
+ */
 const ACTION_OPTIONS = [
   "none",
   "more-info",
@@ -24,8 +47,17 @@ const ACTION_OPTIONS = [
   "fire-dom-event",
 ]
 
+/**
+ * Modes de rendu disponibles pour la carte.
+ */
 const DISPLAY_TYPES = ["compact", "icon", "picture", "camera"]
+/**
+ * Positions autorisees pour les features type area-controls.
+ */
 const FEATURE_POSITIONS = ["bottom", "inline"]
+/**
+ * Emplacements disponibles pour les entites dans la carte.
+ */
 const ENTITY_POSITIONS = [
   "bottom-left",
   "bottom-center",
@@ -35,16 +67,49 @@ const ENTITY_POSITIONS = [
   "top-right",
   "title-right",
 ]
+/**
+ * Variantes visuelles disponibles pour chaque entite.
+ */
 const ENTITY_DISPLAY_MODES = ["button", "text", "icon"]
+/**
+ * Coins disponibles pour placer un badge sur un bouton.
+ */
 const ENTITY_BADGE_POSITIONS = ["top-right", "top-left", "bottom-right", "bottom-left"]
+/**
+ * Modes de contenu pris en charge par les badges.
+ */
 const ENTITY_BADGE_MODES = ["auto", "state", "count_on", "text"]
+/**
+ * Regles de visibilite disponibles pour les badges.
+ */
 const ENTITY_BADGE_SHOW_WHEN = ["auto", "always", "active", "on", "nonzero", "state"]
+/**
+ * Effets typographiques disponibles pour le titre.
+ */
 const TITLE_EFFECTS = ["none", "shadow", "neon", "outline"]
+/**
+ * Classes de capteurs resumees automatiquement par defaut.
+ */
 const DEFAULT_SENSOR_CLASSES = ["temperature", "humidity"]
+/**
+ * Classes de binary_sensor affichees comme alertes par defaut.
+ */
 const DEFAULT_ALERT_CLASSES = ["moisture", "motion"]
+/**
+ * Hauteur de reference utilisee pour stabiliser les valeurs en vh.
+ */
 const CARD_HEIGHT_VIEWPORT_REFERENCE = 900
+/**
+ * Classes de capteurs qui se cumulent au lieu de prendre une valeur mediane.
+ */
 const SUM_SENSOR_CLASSES = new Set(["energy", "gas", "monetary", "power", "volume", "water"])
+/**
+ * Types de feature acceptes pour les controles de zone.
+ */
 const AREA_CONTROL_FEATURE_TYPES = new Set(["area-controls", "area_controls"])
+/**
+ * Etats consideres inactifs pour couleurs, badges et actions visuelles.
+ */
 const INACTIVE_STATES = new Set([
   "off",
   "closed",
@@ -55,6 +120,9 @@ const INACTIVE_STATES = new Set([
   "unavailable",
   "unknown",
 ])
+/**
+ * Alias de couleurs Home Assistant acceptes dans la configuration.
+ */
 const COLOR_TOKENS = {
   primary: "var(--primary-color, #03A9F4)",
   accent: "var(--accent-color, var(--primary-color, #03A9F4))",
@@ -82,6 +150,9 @@ const COLOR_TOKENS = {
   white: "#FFFFFF",
 }
 
+/**
+ * Icones par device_class pour les sensors numeriques.
+ */
 const SENSOR_DEVICE_CLASS_ICONS = {
   apparent_power: "mdi:flash",
   battery: "mdi:battery",
@@ -103,6 +174,9 @@ const SENSOR_DEVICE_CLASS_ICONS = {
   water: "mdi:water",
 }
 
+/**
+ * Icones off/on par device_class pour les binary_sensors.
+ */
 const BINARY_SENSOR_DEVICE_CLASS_ICONS = {
   battery: ["mdi:battery-outline", "mdi:battery"],
   cold: ["mdi:thermometer", "mdi:snowflake"],
@@ -132,6 +206,9 @@ const BINARY_SENSOR_DEVICE_CLASS_ICONS = {
   window: ["mdi:window-closed", "mdi:window-open"],
 }
 
+/**
+ * Icones par device_class pour les covers.
+ */
 const COVER_DEVICE_CLASS_ICONS = {
   awning: "mdi:awning",
   blind: "mdi:blinds",
@@ -145,6 +222,9 @@ const COVER_DEVICE_CLASS_ICONS = {
   window: "mdi:window-closed",
 }
 
+/**
+ * Icones de secours par domaine lorsque HA ne fournit rien.
+ */
 const DOMAIN_ICONS = {
   alarm_control_panel: "mdi:shield-home",
   automation: "mdi:robot",
@@ -182,6 +262,9 @@ const DOMAIN_ICONS = {
   weather: "mdi:weather-partly-cloudy",
 }
 
+/**
+ * Valeurs visuelles par defaut de la carte.
+ */
 const STYLE_DEFAULTS = {
   button_icon_color_on: "var(--primary-color, #00AEEF)",
   button_icon_color_off: "var(--secondary-text-color, #9CA3AF)",
@@ -198,6 +281,9 @@ const STYLE_DEFAULTS = {
   border_radius: "16px",
 }
 
+/**
+ * Valeurs par defaut appliquees a chaque entite.
+ */
 const ENTITY_DEFAULTS = {
   position: "",
   display_mode: "button",
@@ -215,10 +301,15 @@ const ENTITY_DEFAULTS = {
   background_color_off: "",
 }
 
+/**
+ * Configuration minimale normalisee avant rendu et edition.
+ */
 const DEFAULT_CONFIG = {
   title: "",
   area: "",
   display_type: "picture",
+  icon: "",
+  image: "",
   camera_entity: "",
   aspect_ratio: "16:9",
   height: "",
@@ -243,20 +334,32 @@ const DEFAULT_CONFIG = {
   state_color: false,
 }
 
-const LEGACY_CONFIG_KEYS = new Set([
-  "camera_image",
-  "camera_view",
-  "tap_action",
-  "hold_action",
-  "double_tap_action",
-  "entity_hold_action",
-  "entity_double_tap_action",
-])
-
+/**
+ * Convertit une valeur inconnue en chaine sure.
+ */
 const safeText = (value) => (value === null || value === undefined ? "" : String(value))
 
+/**
+ * Clone les objets de configuration simples sans conserver de references.
+ */
 const deepClone = (value) => JSON.parse(JSON.stringify(value))
 
+/**
+ * Conserve uniquement les cles de configuration actuelles de la carte.
+ */
+const pickKnownConfig = (config = {}) => {
+  const known = {}
+  for (const [key, value] of Object.entries(config || {})) {
+    if (Object.prototype.hasOwnProperty.call(DEFAULT_CONFIG, key)) {
+      known[key] = value
+    }
+  }
+  return known
+}
+
+/**
+ * Echappe du texte avant injection dans le HTML genere.
+ */
 const escapeHtml = (value) =>
   safeText(value).replace(/[&<>"']/g, (char) => {
     const map = {
@@ -269,8 +372,14 @@ const escapeHtml = (value) =>
     return map[char]
   })
 
+/**
+ * Alias explicite pour echapper les attributs HTML.
+ */
 const escapeAttribute = escapeHtml
 
+/**
+ * Transforme une entree entity YAML en objet exploitable.
+ */
 const parseEntityConfig = (rawEntity) => {
   if (typeof rawEntity === "string") {
     return { entity: rawEntity }
@@ -281,24 +390,36 @@ const parseEntityConfig = (rawEntity) => {
   return { ...rawEntity }
 }
 
+/**
+ * Convertit une liste texte en tableau d entites.
+ */
 const parseEntitiesText = (text) =>
   safeText(text)
     .split(/\r?\n|,|;/)
     .map((item) => item.trim())
     .filter(Boolean)
 
+/**
+ * Convertit une liste texte en domaines normalises.
+ */
 const parseDomainsText = (text) =>
   safeText(text)
     .split(/\r?\n|,|;/)
     .map((item) => item.trim().toLowerCase())
     .filter(Boolean)
 
+/**
+ * Decoupe les champs texte multi-valeurs separes par virgule ou retour ligne.
+ */
 const parseStringList = (text) =>
   safeText(text)
     .split(/\r?\n|,|;/)
     .map((item) => item.trim())
     .filter(Boolean)
 
+/**
+ * Normalise une liste obligatoire avec fallback.
+ */
 const normalizeStringList = (value, fallback = [], lowerCase = false) => {
   if (value === undefined || value === null || value === "") {
     return [...fallback]
@@ -312,6 +433,9 @@ const normalizeStringList = (value, fallback = [], lowerCase = false) => {
   return normalized.filter(Boolean)
 }
 
+/**
+ * Normalise une liste optionnelle sans ajouter de valeurs par defaut.
+ */
 const normalizeOptionalStringList = (value, lowerCase = false) => {
   const list = Array.isArray(value) ? value : parseStringList(value)
   return list
@@ -322,27 +446,51 @@ const normalizeOptionalStringList = (value, lowerCase = false) => {
     .filter(Boolean)
 }
 
+/**
+ * Valide une valeur de select contre une liste autorisee.
+ */
 const normalizeSelect = (value, allowed, fallback) =>
   allowed.includes(value) ? value : fallback
 
+/**
+ * Valide la position d une entite.
+ */
 const normalizeEntityPosition = (value, fallback = "bottom-right") =>
   ENTITY_POSITIONS.includes(value) ? value : fallback
 
+/**
+ * Valide le mode d affichage d une entite.
+ */
 const normalizeEntityDisplayMode = (value, fallback = "button") =>
   ENTITY_DISPLAY_MODES.includes(value) ? value : fallback
 
+/**
+ * Valide la position d un badge.
+ */
 const normalizeEntityBadgePosition = (value, fallback = "top-right") =>
   ENTITY_BADGE_POSITIONS.includes(value) ? value : fallback
 
+/**
+ * Valide le mode de contenu d un badge.
+ */
 const normalizeEntityBadgeMode = (value, fallback = "auto") =>
   ENTITY_BADGE_MODES.includes(value) ? value : fallback
 
+/**
+ * Valide la condition d affichage d un badge.
+ */
 const normalizeEntityBadgeShowWhen = (value, fallback = "auto") =>
   ENTITY_BADGE_SHOW_WHEN.includes(value) ? value : fallback
 
+/**
+ * Valide l effet applique au titre.
+ */
 const normalizeTitleEffect = (value, fallback = "shadow") =>
   TITLE_EFFECTS.includes(value) ? value : fallback
 
+/**
+ * Determine si une entite est active selon son etat HA.
+ */
 const isEntityActive = (entityState) => {
   if (!entityState || INACTIVE_STATES.has(entityState.state)) {
     return false
@@ -350,11 +498,17 @@ const isEntityActive = (entityState) => {
   return Boolean(entityState.state)
 }
 
+/**
+ * Convertit un token couleur HA ou conserve une couleur CSS brute.
+ */
 const resolveColorToken = (value, fallback = "") => {
   const color = safeText(value || fallback).trim()
   return COLOR_TOKENS[color] || color
 }
 
+/**
+ * Valide une taille CSS simple avant de l injecter dans le rendu.
+ */
 const normalizeCssSize = (value, fallback = "") => {
   if (typeof value === "number") {
     return Number.isFinite(value) && value > 0 ? `${value}px` : fallback
@@ -380,11 +534,17 @@ const normalizeCssSize = (value, fallback = "") => {
   return fallback
 }
 
+/**
+ * Extrait une hauteur numerique lorsque la valeur est deja en pixels.
+ */
 const getPixelHeightFromCssSize = (value) => {
   const match = safeText(value).trim().match(/^(\d+(?:\.\d+)?)px$/i)
   return match ? Number(match[1]) : 0
 }
 
+/**
+ * Transforme les hauteurs vh en pixels stables entre mobile et desktop.
+ */
 const resolveStableCardHeight = (value, fallback = "") => {
   const normalized = normalizeCssSize(value)
   if (!normalized) {
@@ -400,6 +560,9 @@ const resolveStableCardHeight = (value, fallback = "") => {
   return Number.isFinite(pixels) && pixels > 0 ? `${Math.round(pixels)}px` : fallback
 }
 
+/**
+ * Traduit les medias HA en URLs servies par Home Assistant.
+ */
 const getImageServePath = (value) => {
   const text = safeText(value).trim()
   if (!text) {
@@ -423,6 +586,9 @@ const getImageServePath = (value) => {
   return ""
 }
 
+/**
+ * Normalise les valeurs d image venant du YAML ou du picker HA.
+ */
 const normalizeImageSourceValue = (value) => {
   if (value === undefined || value === null) {
     return ""
@@ -443,9 +609,15 @@ const normalizeImageSourceValue = (value) => {
   return getImageServePath(direct) || getImageServePath(thumbnail) || safeText(thumbnail || direct).trim()
 }
 
+/**
+ * Detecte les URLs que le navigateur peut charger directement.
+ */
 const isNativeBrowserImageUrl = (value) =>
   /^(?:https?:)?\/\//i.test(value) || /^(?:data|blob):/i.test(value)
 
+/**
+ * Valide une configuration d action d entite.
+ */
 const normalizeActionConfig = (actionConfig, fallbackAction = "more-info") => {
   if (!actionConfig || typeof actionConfig !== "object") {
     return { action: fallbackAction }
@@ -462,6 +634,9 @@ const normalizeActionConfig = (actionConfig, fallbackAction = "more-info") => {
   }
 }
 
+/**
+ * Formate un nombre avec les helpers HA quand ils existent.
+ */
 const formatNumber = (hass, value, precision) => {
   const numeric = Number(value)
   if (Number.isNaN(numeric)) {
@@ -476,6 +651,9 @@ const formatNumber = (hass, value, precision) => {
   }).format(numeric)
 }
 
+/**
+ * Choisit le meilleur libelle disponible pour une entite.
+ */
 const getEntityName = (hass, entityState, fallbackEntityId, entityConfig = {}) => {
   if (entityConfig.name) {
     return safeText(entityConfig.name)
@@ -492,6 +670,9 @@ const getEntityName = (hass, entityState, fallbackEntityId, entityConfig = {}) =
   return entityState?.attributes?.friendly_name || fallbackEntityId
 }
 
+/**
+ * Choisit l icone la plus specifique pour une entite.
+ */
 const getEntityIcon = (hass, entityState, entityConfig = {}) => {
   const entityId = entityConfig.entity || entityState?.entity_id || ""
   const domain = entityId.split(".")[0]
@@ -536,6 +717,9 @@ const getEntityIcon = (hass, entityState, entityConfig = {}) => {
   return DOMAIN_ICONS[domain] || "mdi:checkbox-blank-circle-outline"
 }
 
+/**
+ * Declenche une navigation Lovelace sans rechargement complet.
+ */
 const applyNavigation = (path, replace = false) => {
   if (!path) {
     return
@@ -548,6 +732,9 @@ const applyNavigation = (path, replace = false) => {
   window.dispatchEvent(new Event("location-changed"))
 }
 
+/**
+ * Emet un evenement compose compatible avec Home Assistant.
+ */
 const fireCustomEvent = (node, type, detail = {}) => {
   node.dispatchEvent(
     new CustomEvent(type, {
@@ -558,6 +745,9 @@ const fireCustomEvent = (node, type, detail = {}) => {
   )
 }
 
+/**
+ * Execute l action HA demandee par un bouton d entite.
+ */
 const performAction = (node, hass, entityConfig, actionConfig) => {
   const action = actionConfig?.action || "more-info"
 
@@ -610,6 +800,9 @@ const performAction = (node, hass, entityConfig, actionConfig) => {
   }
 }
 
+/**
+ * Retrouve les entites associees a une zone HA.
+ */
 const resolveAreaEntities = (hass, areaId) => {
   if (!hass?.areas || !hass?.entities) {
     return []
@@ -639,6 +832,9 @@ const resolveAreaEntities = (hass, areaId) => {
   return result
 }
 
+/**
+ * Determine si une entite doit utiliser la couleur d etat HA.
+ */
 const shouldUseStateColor = (entityConfig, cardConfig) => {
   if (typeof entityConfig.state_color === "boolean") {
     return entityConfig.state_color
@@ -646,6 +842,9 @@ const shouldUseStateColor = (entityConfig, cardConfig) => {
   return Boolean(cardConfig.state_color)
 }
 
+/**
+ * Calcule le texte d etat visible pour une entite.
+ */
 const getDisplayState = (hass, entityState, entityRegistryItem, entityConfig) => {
   if (entityConfig.display_state !== undefined) {
     return safeText(entityConfig.display_state)
@@ -676,7 +875,7 @@ const getDisplayState = (hass, entityState, entityRegistryItem, entityConfig) =>
     try {
       return hass.formatEntityState(entityState)
     } catch (_error) {
-      // Fall back to local formatting below.
+      // Repli vers le formatage local ci-dessous.
     }
   }
 
@@ -694,15 +893,27 @@ const getDisplayState = (hass, entityState, entityRegistryItem, entityConfig) =>
   return safeText(entityState.state)
 }
 
+/**
+ * Element Lovelace principal responsable du rendu de la carte.
+ */
 class AlphaAreaCard extends HTMLElement {
+  /**
+   * Retourne l element editeur utilise par Lovelace.
+   */
   static getConfigElement() {
     return document.createElement(CARD_EDITOR_TYPE)
   }
 
+  /**
+   * Fournit une configuration vierge lors de l ajout de carte.
+   */
   static getStubConfig() {
     return {}
   }
 
+  /**
+   * Annonce a Lovelace que la carte occupe toute la largeur.
+   */
   static getGridOptions() {
     return {
       columns: "full",
@@ -711,15 +922,24 @@ class AlphaAreaCard extends HTMLElement {
     }
   }
 
+  /**
+   * Indique que la carte ne depend pas d attributs HTML observes.
+   */
   static get observedAttributes() {
     return []
   }
 
+  /**
+   * Prepare le shadow DOM et les handlers persistants.
+   */
   constructor() {
     super()
     this.attachShadow({ mode: "open" })
+    // Etat Home Assistant injecte par Lovelace.
     this._hass = null
+    // Configuration normalisee utilisee par le rendu.
     this.config = deepClone(DEFAULT_CONFIG)
+    // Modele derive de la config et de l etat HA pour eviter de recalculer dans le template.
     this._renderModel = {
       area: null,
       areaEntityIds: [],
@@ -730,8 +950,11 @@ class AlphaAreaCard extends HTMLElement {
       sensorSummaries: [],
       cameraEntity: "",
     }
+    // Signature du dernier rendu, utile pour couper les rerenders identiques.
     this._lastStateSnapshot = ""
+    // Timers de tap par entite pour distinguer tap simple et double tap.
     this._entityClickTimers = new Map()
+    // Handlers binds une seule fois afin de pouvoir les retirer proprement a chaque rendu.
     this._boundOnEntityClick = this._onEntityClick.bind(this)
     this._boundOnEntityDoubleClick = this._onEntityDoubleClick.bind(this)
     this._boundOnEntityContextMenu = this._onEntityContextMenu.bind(this)
@@ -739,22 +962,22 @@ class AlphaAreaCard extends HTMLElement {
     this._boundOnEntityPointerEnd = this._onEntityPointerEnd.bind(this)
   }
 
+  /**
+   * Normalise la configuration recue avant de la rendre ou l editer.
+   */
   setConfig(config) {
+    const incoming = pickKnownConfig(config)
     const merged = {
       ...deepClone(DEFAULT_CONFIG),
-      ...(config || {}),
+      ...incoming,
       styles: {
         ...deepClone(DEFAULT_CONFIG.styles),
-        ...(config?.styles || {}),
+        ...(incoming.styles || {}),
       },
       entity_defaults: {
         ...deepClone(DEFAULT_CONFIG.entity_defaults),
-        ...(config?.entity_defaults || {}),
+        ...(incoming.entity_defaults || {}),
       },
-    }
-
-    for (const key of LEGACY_CONFIG_KEYS) {
-      delete merged[key]
     }
 
     if (merged.entities && !Array.isArray(merged.entities)) {
@@ -800,6 +1023,9 @@ class AlphaAreaCard extends HTMLElement {
     this._render()
   }
 
+  /**
+   * Recoit l etat Home Assistant et limite les rerenders inutiles.
+   */
   set hass(hass) {
     const previous = this._hass
     this._hass = hass
@@ -820,14 +1046,23 @@ class AlphaAreaCard extends HTMLElement {
     }
   }
 
+  /**
+   * Expose l etat Home Assistant courant aux helpers internes.
+   */
   get hass() {
     return this._hass
   }
 
+  /**
+   * Convertit la hauteur configuree en taille approximative de carte.
+   */
   getCardSize() {
     return this._getCardRows()
   }
 
+  /**
+   * Retourne les options de grille dynamiques de l instance.
+   */
   getGridOptions() {
     return {
       columns: "full",
@@ -836,6 +1071,9 @@ class AlphaAreaCard extends HTMLElement {
     }
   }
 
+  /**
+   * Calcule un nombre de lignes indicatif pour les anciennes vues.
+   */
   _getCardRows() {
     const configuredHeight = resolveStableCardHeight(this.config?.height)
     const pixelHeight = getPixelHeightFromCssSize(configuredHeight)
@@ -852,6 +1090,9 @@ class AlphaAreaCard extends HTMLElement {
     return 4
   }
 
+  /**
+   * Verifie si un changement HA necessite un rerender.
+   */
   _shouldRefresh(previousHass, nextHass) {
     if (!nextHass || !previousHass) {
       return true
@@ -935,6 +1176,9 @@ class AlphaAreaCard extends HTMLElement {
     return false
   }
 
+  /**
+   * Construit les groupes d entites utilises par le rendu.
+   */
   _computeRenderModel() {
     const hass = this._hass
     if (!hass) {
@@ -1088,6 +1332,9 @@ class AlphaAreaCard extends HTMLElement {
     }
   }
 
+  /**
+   * Detecte la presence d une feature area-controls.
+   */
   _hasAreaControlsFeature() {
     return (this.config.features || []).some((feature) => {
       const type = typeof feature === "string" ? feature : feature?.type
@@ -1095,6 +1342,9 @@ class AlphaAreaCard extends HTMLElement {
     })
   }
 
+  /**
+   * Lit la liste des controles declares dans les features.
+   */
   _getAreaControls() {
     const feature = (this.config.features || []).find((item) => {
       const type = typeof item === "string" ? item : item?.type
@@ -1103,6 +1353,9 @@ class AlphaAreaCard extends HTMLElement {
     return Array.isArray(feature?.controls) ? feature.controls : []
   }
 
+  /**
+   * Associe une entite a un controle area-controls si possible.
+   */
   _getAreaControlConfig(entityConfig, domain, controls) {
     if (!controls.length) {
       return TOGGLE_DOMAINS.has(domain)
@@ -1124,6 +1377,9 @@ class AlphaAreaCard extends HTMLElement {
     return false
   }
 
+  /**
+   * Choisit la camera a utiliser en mode camera.
+   */
   _resolveCameraEntity(areaEntityIds, parsedEntities) {
     const configured = safeText(this.config.camera_entity)
     if (configured.startsWith("camera.")) {
@@ -1140,6 +1396,9 @@ class AlphaAreaCard extends HTMLElement {
     return areaEntityIds.find((entityId) => entityId.startsWith("camera.")) || ""
   }
 
+  /**
+   * Regroupe les capteurs similaires en resumes compacts.
+   */
   _buildSensorSummaries(sensorCandidates) {
     const groups = new Map()
 
@@ -1197,10 +1456,16 @@ class AlphaAreaCard extends HTMLElement {
     })
   }
 
+  /**
+   * Retourne l icone par defaut d une classe de capteur.
+   */
   _getSensorClassIcon(deviceClass) {
     return SENSOR_DEVICE_CLASS_ICONS[deviceClass] || "mdi:gauge"
   }
 
+  /**
+   * Transforme une device_class en libelle lisible.
+   */
   _formatDeviceClassLabel(deviceClass) {
     const labels = {
       apparent_power: "Puissance apparente",
@@ -1222,6 +1487,9 @@ class AlphaAreaCard extends HTMLElement {
     return labels[deviceClass] || safeText(deviceClass).replace(/_/g, " ")
   }
 
+  /**
+   * Determine l image de fond selon le mode courant.
+   */
   _getBackgroundImage() {
     const hass = this._hass
     if (!hass) {
@@ -1247,6 +1515,9 @@ class AlphaAreaCard extends HTMLElement {
     return this._resolveImageUrl(selected)
   }
 
+  /**
+   * Prepare une URL image stable pour navigateur et application mobile.
+   */
   _resolveImageUrl(value) {
     const selected = normalizeImageSourceValue(value)
     if (!selected) {
@@ -1264,6 +1535,9 @@ class AlphaAreaCard extends HTMLElement {
     }
   }
 
+  /**
+   * Construit l URL camera_proxy relative pour Home Assistant.
+   */
   _getCameraImageUrl(entityId) {
     if (!entityId) {
       return ""
@@ -1274,10 +1548,16 @@ class AlphaAreaCard extends HTMLElement {
     return `/api/camera_proxy/${entityId}?t=${cacheKey}`
   }
 
+  /**
+   * Choisit l icone de la carte ou de la zone.
+   */
   _getAreaIcon() {
     return this.config.icon || this._renderModel.area?.icon || "mdi:home-map-marker"
   }
 
+  /**
+   * Convertit le ratio configure en syntaxe CSS aspect-ratio.
+   */
   _getAspectRatioCss() {
     const value = safeText(this.config.aspect_ratio || "16:9").trim()
     if (!value) {
@@ -1299,6 +1579,9 @@ class AlphaAreaCard extends HTMLElement {
     return width > 0 && height > 0 ? `${width} / ${height}` : "16 / 9"
   }
 
+  /**
+   * Prepare le filtre image en limitant les cas fragiles sur iOS.
+   */
   _getImageFilter(styles = {}) {
     const blur = normalizeCssSize(styles.image_blur, "0px")
     if (!blur || /^0(?:\.0+)?(?:px|rem|em|vh|svh|lvh|dvh|vw|vmin|vmax|%)?$/i.test(blur)) {
@@ -1307,6 +1590,9 @@ class AlphaAreaCard extends HTMLElement {
     return `blur(${blur})`
   }
 
+  /**
+   * Calcule l overlay d assombrissement applique au-dessus de l image.
+   */
   _getOverlayBackground() {
     const value = this.config.darken_image
     const strength =
@@ -1321,22 +1607,34 @@ class AlphaAreaCard extends HTMLElement {
     return `linear-gradient(180deg, rgba(15, 23, 42, ${top}) 0%, rgba(15, 23, 42, ${bottom}) 82%)`
   }
 
+  /**
+   * Bloque la propagation pour garder le focus sur le bouton d entite.
+   */
   _stopEntityEvent(event) {
     event.stopPropagation()
     event.stopImmediatePropagation?.()
   }
 
+  /**
+   * Active l etat visuel appuye du bouton d entite.
+   */
   _onEntityPointerDown(event) {
     this._stopEntityEvent(event)
     event.currentTarget?.focus?.({ preventScroll: true })
     event.currentTarget?.classList?.add("is-pressing")
   }
 
+  /**
+   * Retire l etat appuye du bouton d entite.
+   */
   _onEntityPointerEnd(event) {
     this._stopEntityEvent(event)
     event.currentTarget?.classList?.remove("is-pressing")
   }
 
+  /**
+   * Execute le tap simple apres avoir laisse passer un double tap potentiel.
+   */
   _onEntityClick(event) {
     this._stopEntityEvent(event)
 
@@ -1367,6 +1665,9 @@ class AlphaAreaCard extends HTMLElement {
     this._entityClickTimers.set(entityId, nextTimer)
   }
 
+  /**
+   * Execute l action double tap de l entite.
+   */
   _onEntityDoubleClick(event) {
     this._stopEntityEvent(event)
     event.preventDefault()
@@ -1390,6 +1691,9 @@ class AlphaAreaCard extends HTMLElement {
     this._runEntityAction(config, "double_tap_action")
   }
 
+  /**
+   * Execute l action hold ou clic droit de l entite.
+   */
   _onEntityContextMenu(event) {
     this._stopEntityEvent(event)
     event.preventDefault()
@@ -1413,6 +1717,9 @@ class AlphaAreaCard extends HTMLElement {
     this._runEntityAction(config, "hold_action")
   }
 
+  /**
+   * Retrouve la configuration rendue pour une entite.
+   */
   _findEntityConfig(entityId) {
     const list = [
       ...this._renderModel.entitiesDialog,
@@ -1424,6 +1731,9 @@ class AlphaAreaCard extends HTMLElement {
     return list.find((item) => item.entity === entityId)
   }
 
+  /**
+   * Fournit l action par defaut d une entite.
+   */
   _defaultEntityAction(entityConfig, actionKey) {
     const entityId = entityConfig?.entity || ""
     const domain = entityId.split(".")[0]
@@ -1445,6 +1755,9 @@ class AlphaAreaCard extends HTMLElement {
     return { action: "none" }
   }
 
+  /**
+   * Normalise puis execute l action d une entite.
+   */
   _runEntityAction(entityConfig, actionKey) {
     if (!this._hass || !entityConfig) {
       return
@@ -1458,6 +1771,9 @@ class AlphaAreaCard extends HTMLElement {
     performAction(this, this._hass, entityConfig, normalized)
   }
 
+  /**
+   * Assemble les options visuelles finales d une entite.
+   */
   _getEntityPresentation(entityConfig, asSensorLine = false) {
     const defaults = this.config.entity_defaults || DEFAULT_CONFIG.entity_defaults
     const styles = this.config.styles || STYLE_DEFAULTS
@@ -1515,6 +1831,9 @@ class AlphaAreaCard extends HTMLElement {
     }
   }
 
+  /**
+   * Transforme la presentation d entite en variables CSS inline.
+   */
   _getEntityButtonStyle(presentation) {
     const vars = {
       "--mac-entity-icon-color-on": resolveColorToken(presentation.iconColorOn),
@@ -1531,11 +1850,17 @@ class AlphaAreaCard extends HTMLElement {
       .join(" ")
   }
 
+  /**
+   * Calcule la position finale d une entite.
+   */
   _getEntityPosition(entityConfig, fallbackPosition) {
     const defaultPosition = this.config.entity_defaults?.position
     return normalizeEntityPosition(entityConfig.position || defaultPosition, fallbackPosition)
   }
 
+  /**
+   * Prepare les groupes de rendu pour chaque position disponible.
+   */
   _makePositionBuckets() {
     return ENTITY_POSITIONS.reduce((buckets, position) => {
       buckets[position] = []
@@ -1543,10 +1868,16 @@ class AlphaAreaCard extends HTMLElement {
     }, {})
   }
 
+  /**
+   * Rend les boutons d une position donnee.
+   */
   _renderPositionZone(buckets, position) {
     return `<div class=\"entity-zone zone-${position}\">${buckets[position].join("")}</div>`
   }
 
+  /**
+   * Rend un bouton, texte ou icone d entite.
+   */
   _renderEntityButton(entityConfig, asSensorLine = false) {
     const hass = this._hass
     const entityState = hass?.states?.[entityConfig.entity]
@@ -1600,11 +1931,17 @@ class AlphaAreaCard extends HTMLElement {
     `
   }
 
+  /**
+   * Lit les options badge imbriquees dans entity.badge.
+   */
   _getNestedBadgeConfig(entityConfig = {}) {
     const rawBadge = entityConfig.badge
     return rawBadge && typeof rawBadge === "object" ? rawBadge : {}
   }
 
+  /**
+   * Choisit l entite source du badge.
+   */
   _getEntityBadgeSourceId(entityConfig = {}) {
     const nested = this._getNestedBadgeConfig(entityConfig)
     return safeText(
@@ -1612,6 +1949,9 @@ class AlphaAreaCard extends HTMLElement {
     ).trim()
   }
 
+  /**
+   * Compte les membres actifs d un groupe utilise en badge.
+   */
   _getBadgeMemberCount(entityId) {
     const state = this._hass?.states?.[entityId]
     const members = state?.attributes?.entity_id
@@ -1624,6 +1964,9 @@ class AlphaAreaCard extends HTMLElement {
     }, 0)
   }
 
+  /**
+   * Extrait une valeur numerique exploitable par le badge.
+   */
   _getBadgeNumericValue(entityId, text = "") {
     const memberCount = this._getBadgeMemberCount(entityId)
     if (memberCount !== null) {
@@ -1650,6 +1993,9 @@ class AlphaAreaCard extends HTMLElement {
     return null
   }
 
+  /**
+   * Formate l etat de l entite source du badge.
+   */
   _getBadgeDisplayState(entityId) {
     const sourceState = this._hass?.states?.[entityId]
     if (!sourceState) {
@@ -1661,6 +2007,9 @@ class AlphaAreaCard extends HTMLElement {
     })
   }
 
+  /**
+   * Calcule le contenu, la visibilite et le style d un badge.
+   */
   _getEntityBadgeConfig(entityConfig, displayState) {
     const rawBadge = entityConfig.badge
     if (rawBadge === false || rawBadge?.enabled === false) {
@@ -1786,6 +2135,9 @@ class AlphaAreaCard extends HTMLElement {
     }
   }
 
+  /**
+   * Rend le HTML du badge d entite.
+   */
   _renderEntityBadge(entityConfig, displayState) {
     const badge = this._getEntityBadgeConfig(entityConfig, displayState)
     if (!badge) {
@@ -1800,6 +2152,9 @@ class AlphaAreaCard extends HTMLElement {
     `
   }
 
+  /**
+   * Construit les variables CSS globales de la carte.
+   */
   _computeCardCssVariables() {
     const styles = this.config.styles || {}
     const vars = {
@@ -1825,6 +2180,9 @@ class AlphaAreaCard extends HTMLElement {
       .join(" ")
   }
 
+  /**
+   * Determine l ombre de texte finale du titre.
+   */
   _getTitleTextShadow(styles) {
     const customShadow = safeText(styles.title_text_shadow).trim()
     if (customShadow) {
@@ -1843,6 +2201,9 @@ class AlphaAreaCard extends HTMLElement {
     }
   }
 
+  /**
+   * Produit le HTML/CSS final de la carte.
+   */
   _render() {
     if (!this.shadowRoot || !this._hass || !this.config) {
       return
@@ -2232,49 +2593,58 @@ class AlphaAreaCard extends HTMLElement {
           right: auto;
           bottom: auto;
           left: auto;
-          min-width: 16px;
-          height: 16px;
-          border-radius: 8px;
+          min-width: 14px;
+          max-width: 30px;
+          height: 14px;
+          border-radius: 999px;
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          gap: 2px;
-          font-size: 10px;
+          gap: 1px;
+          font-size: 9px;
           font-weight: 700;
-          padding: 0 4px;
+          padding: 0 3px;
           background: var(--mac-entity-badge-background, var(--mac-badge-background));
           color: var(--mac-entity-badge-color, var(--mac-badge-text-color));
           border: 1px solid var(--mac-entity-badge-border-color, rgba(255, 255, 255, 0.28));
           box-shadow: 0 1px 4px rgba(0, 0, 0, 0.36);
           pointer-events: none;
+          overflow: hidden;
+          text-overflow: ellipsis;
           line-height: 1;
           white-space: nowrap;
         }
 
         .badge-top-right {
-          top: -5px;
-          right: -5px;
+          top: -4px;
+          right: -4px;
         }
 
         .badge-top-left {
-          top: -5px;
-          left: -5px;
+          top: -4px;
+          left: -4px;
         }
 
         .badge-bottom-right {
-          right: -5px;
-          bottom: -5px;
+          right: -4px;
+          bottom: -4px;
         }
 
         .badge-bottom-left {
-          left: -5px;
-          bottom: -5px;
+          left: -4px;
+          bottom: -4px;
+        }
+
+        .entity-badge span {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
 
         .entity-badge-icon {
-          width: 11px;
-          height: 11px;
-          --mdc-icon-size: 11px;
+          width: 9px;
+          height: 9px;
+          --mdc-icon-size: 9px;
         }
 
         @media (max-width: 600px) {
@@ -2336,7 +2706,13 @@ class AlphaAreaCard extends HTMLElement {
   }
 }
 
+/**
+ * Editeur visuel Home Assistant pour configurer la carte.
+ */
 class AlphaAreaCardEditor extends LitElement {
+  /**
+   * Declare les proprietes reactives de l editeur LitElement.
+   */
   static get properties() {
     return {
       hass: { type: Object },
@@ -2347,8 +2723,11 @@ class AlphaAreaCardEditor extends LitElement {
     }
   }
 
+  /**
+   * Normalise la configuration recue avant de la rendre ou l editer.
+   */
   setConfig(config) {
-    const incoming = config || {}
+    const incoming = pickKnownConfig(config)
     this.config = {
       ...deepClone(DEFAULT_CONFIG),
       ...incoming,
@@ -2360,10 +2739,6 @@ class AlphaAreaCardEditor extends LitElement {
         ...DEFAULT_CONFIG.entity_defaults,
         ...(incoming.entity_defaults || {}),
       },
-    }
-
-    for (const key of LEGACY_CONFIG_KEYS) {
-      delete this.config[key]
     }
     this.config.display_type = normalizeSelect(this.config.display_type, DISPLAY_TYPES, "picture")
     this.config.features_position = normalizeSelect(
@@ -2394,6 +2769,9 @@ class AlphaAreaCardEditor extends LitElement {
     this._jsonErrors = {}
   }
 
+  /**
+   * Emet la configuration nettoyee vers Lovelace.
+   */
   _emit(config) {
     this.dispatchEvent(
       new CustomEvent("config-changed", {
@@ -2404,11 +2782,14 @@ class AlphaAreaCardEditor extends LitElement {
     )
   }
 
+  /**
+   * Retire les valeurs par defaut avant sauvegarde YAML.
+   */
   _pruneConfig(config) {
     const cleaned = {}
 
     for (const [key, value] of Object.entries(config || {})) {
-      if (LEGACY_CONFIG_KEYS.has(key)) {
+      if (!Object.prototype.hasOwnProperty.call(DEFAULT_CONFIG, key)) {
         continue
       }
 
@@ -2442,6 +2823,9 @@ class AlphaAreaCardEditor extends LitElement {
     return cleaned
   }
 
+  /**
+   * Nettoie un objet imbrique en retirant ses valeurs par defaut.
+   */
   _pruneObject(value, defaults = {}) {
     const cleaned = {}
     for (const [key, item] of Object.entries(value || {})) {
@@ -2452,10 +2836,16 @@ class AlphaAreaCardEditor extends LitElement {
     return cleaned
   }
 
+  /**
+   * Compare deux valeurs de configuration serialisables.
+   */
   _isDefaultValue(value, defaultValue) {
     return JSON.stringify(value) === JSON.stringify(defaultValue)
   }
 
+  /**
+   * Ecrit une valeur dans la config par chemin pointe.
+   */
   _setValue(path, value) {
     const updated = structuredClone(this.config)
     const parts = path.split(".")
@@ -2472,6 +2862,9 @@ class AlphaAreaCardEditor extends LitElement {
     this._emit(updated)
   }
 
+  /**
+   * Supprime une valeur dans la config par chemin pointe.
+   */
   _removeValue(path) {
     const updated = structuredClone(this.config)
     const parts = path.split(".")
@@ -2487,6 +2880,9 @@ class AlphaAreaCardEditor extends LitElement {
     this._emit(updated)
   }
 
+  /**
+   * Met a jour une valeur texte depuis un champ standard.
+   */
   _onInput(path, event) {
     const value = event.target.value
     if (value === "") {
@@ -2496,10 +2892,16 @@ class AlphaAreaCardEditor extends LitElement {
     this._setValue(path, value)
   }
 
+  /**
+   * Met a jour une valeur booleenne depuis une checkbox.
+   */
   _onBoolean(path, event) {
     this._setValue(path, event.target.checked)
   }
 
+  /**
+   * Valide puis sauvegarde une taille CSS.
+   */
   _onCssSize(path, event) {
     const raw = safeText(event.target.value).trim()
     if (!raw) {
@@ -2513,6 +2915,9 @@ class AlphaAreaCardEditor extends LitElement {
     }
   }
 
+  /**
+   * Lit une valeur de configuration par chemin pointe.
+   */
   _readConfigPath(path) {
     const parts = path.split(".")
     let node = this.config
@@ -2522,6 +2927,9 @@ class AlphaAreaCardEditor extends LitElement {
     return node
   }
 
+  /**
+   * Recupere une valeur depuis un selecteur HA ou un input natif.
+   */
   _getSelectorValue(event) {
     if (event?.detail && Object.prototype.hasOwnProperty.call(event.detail, "value")) {
       return event.detail.value
@@ -2529,6 +2937,9 @@ class AlphaAreaCardEditor extends LitElement {
     return event?.target?.value
   }
 
+  /**
+   * Convertit la sortie du color picker HA en couleur CSS.
+   */
   _normalizePickerColor(value) {
     if (Array.isArray(value) && value.length >= 3) {
       const [red, green, blue] = value.map((item) =>
@@ -2551,6 +2962,9 @@ class AlphaAreaCardEditor extends LitElement {
     return safeText(value).trim()
   }
 
+  /**
+   * Sauvegarde une valeur issue d un ha-selector.
+   */
   _onSelectorInput(path, event) {
     const value = safeText(this._getSelectorValue(event)).trim()
     if (!value) {
@@ -2560,6 +2974,9 @@ class AlphaAreaCardEditor extends LitElement {
     this._setValue(path, value)
   }
 
+  /**
+   * Sauvegarde une couleur issue du picker HA.
+   */
   _onColorSelector(path, event) {
     const value = this._normalizePickerColor(this._getSelectorValue(event))
     if (!value) {
@@ -2569,6 +2986,9 @@ class AlphaAreaCardEditor extends LitElement {
     this._setValue(path, value)
   }
 
+  /**
+   * Sauvegarde une image issue du picker media HA.
+   */
   _onImagePicker(path, event) {
     const value = normalizeImageSourceValue(this._getSelectorValue(event))
     if (!value) {
@@ -2578,6 +2998,9 @@ class AlphaAreaCardEditor extends LitElement {
     this._setValue(path, value)
   }
 
+  /**
+   * Convertit une couleur CSS simple en hex pour le picker.
+   */
   _toHexColor(value, fallback = "#c7a975") {
     if (!value || typeof value !== "string") return fallback
     const normalized = value.trim()
@@ -2589,6 +3012,9 @@ class AlphaAreaCardEditor extends LitElement {
     return fallback
   }
 
+  /**
+   * Rend un picker d icone HA avec champ texte de secours.
+   */
   _renderIconPicker(label, path, placeholder = "mdi:home") {
     const value = this._readConfigPath(path) || ""
 
@@ -2612,6 +3038,9 @@ class AlphaAreaCardEditor extends LitElement {
     `
   }
 
+  /**
+   * Rend un picker image HA avec champ texte de secours.
+   */
   _renderImagePicker(label, path, placeholder = "/local/images/zone.jpg") {
     const value = normalizeImageSourceValue(this._readConfigPath(path))
 
@@ -2635,6 +3064,9 @@ class AlphaAreaCardEditor extends LitElement {
     `
   }
 
+  /**
+   * Rend un picker couleur HA avec champ texte de secours.
+   */
   _renderColorField(label, path, fallback) {
     const value = this._readConfigPath(path) || ""
     const hexValue = this._toHexColor(value, fallback)
@@ -2672,6 +3104,9 @@ class AlphaAreaCardEditor extends LitElement {
     `
   }
 
+  /**
+   * Ajoute une entite vide a la configuration.
+   */
   _addEntity() {
     const entities = this.config.entities || []
     this._activeEntityIndex = entities.length
@@ -2679,6 +3114,9 @@ class AlphaAreaCardEditor extends LitElement {
     this._setValue("entities", [...entities, ""])
   }
 
+  /**
+   * Supprime une entite de la liste configuree.
+   */
   _removeEntity(index) {
     const entities = this.config.entities || []
     const updated = entities.filter((_, i) => i !== index)
@@ -2686,6 +3124,9 @@ class AlphaAreaCardEditor extends LitElement {
     this._setValue("entities", updated)
   }
 
+  /**
+   * Remplace l entite principale d une ligne.
+   */
   _setEntity(index, value) {
     const entities = this.config.entities || []
     const updated = [...entities]
@@ -2702,6 +3143,9 @@ class AlphaAreaCardEditor extends LitElement {
     this._setValue("entities", updated)
   }
 
+  /**
+   * Deplace une entite dans l ordre d affichage.
+   */
   _moveEntity(index, direction) {
     const entities = [...(this.config.entities || [])]
     const target = direction === "up" ? index - 1 : index + 1
@@ -2715,17 +3159,26 @@ class AlphaAreaCardEditor extends LitElement {
     this._setValue("entities", entities)
   }
 
+  /**
+   * Ouvre le sous-onglet de reglage d une entite.
+   */
   _selectEntity(index) {
     this._activeEntityIndex = index
     this._activeEntityTab = "entity"
     this.requestUpdate()
   }
 
+  /**
+   * Change le sous-onglet actif des entites.
+   */
   _setEntityTab(tab) {
     this._activeEntityTab = tab
     this.requestUpdate()
   }
 
+  /**
+   * Retire les champs vides d une entite avant sauvegarde.
+   */
   _cleanEntityItem(item) {
     if (!item || typeof item !== "object") {
       return item
@@ -2744,6 +3197,9 @@ class AlphaAreaCardEditor extends LitElement {
     return Object.keys(cleaned).length === 1 && cleaned.entity ? cleaned.entity : cleaned
   }
 
+  /**
+   * Applique une modification ciblee sur une entite.
+   */
   _updateEntityItem(index, updater) {
     const entities = [...(this.config.entities || [])]
     const current = entities[index]
@@ -2759,6 +3215,9 @@ class AlphaAreaCardEditor extends LitElement {
     this._setValue("entities", entities)
   }
 
+  /**
+   * Ecrit ou supprime une option d entite.
+   */
   _setEntityOption(index, key, value) {
     this._updateEntityItem(index, (entityConfig) => {
       if (value === "" || value === undefined || value === null) {
@@ -2769,23 +3228,38 @@ class AlphaAreaCardEditor extends LitElement {
     })
   }
 
+  /**
+   * Sauvegarde une option texte d entite.
+   */
   _onEntityInput(index, key, event) {
     this._setEntityOption(index, key, safeText(event.target.value).trim())
   }
 
+  /**
+   * Sauvegarde une option booleenne d entite.
+   */
   _onEntityBoolean(index, key, event) {
     this._setEntityOption(index, key, event.target.checked)
   }
 
+  /**
+   * Retourne l action par defaut d un editeur d action.
+   */
   _getActionFallback(actionKey) {
     return actionKey === "tap_action" ? "more-info" : "none"
   }
 
+  /**
+   * Lit et normalise l action configuree d une entite.
+   */
   _readEntityAction(index, actionKey) {
     const entityConfig = parseEntityConfig((this.config.entities || [])[index]) || {}
     return normalizeActionConfig(entityConfig[actionKey], this._getActionFallback(actionKey))
   }
 
+  /**
+   * Sauvegarde une action complete sur une entite.
+   */
   _setEntityAction(index, actionKey, actionConfig) {
     this._updateEntityItem(index, (entityConfig) => {
       const cleaned = { ...actionConfig }
@@ -2801,6 +3275,9 @@ class AlphaAreaCardEditor extends LitElement {
     })
   }
 
+  /**
+   * Change le type d action d une entite.
+   */
   _updateEntityActionType(index, actionKey, action) {
     const current = this._readEntityAction(index, actionKey)
     this._setEntityAction(index, actionKey, {
@@ -2809,6 +3286,9 @@ class AlphaAreaCardEditor extends LitElement {
     })
   }
 
+  /**
+   * Met a jour un champ simple d action d entite.
+   */
   _updateEntityActionInput(index, actionKey, key, event) {
     const current = this._readEntityAction(index, actionKey)
     const value = safeText(event.target.value).trim()
@@ -2820,6 +3300,9 @@ class AlphaAreaCardEditor extends LitElement {
     this._setEntityAction(index, actionKey, current)
   }
 
+  /**
+   * Valide et sauvegarde un champ JSON d action d entite.
+   */
   _updateEntityActionJson(index, actionKey, key, event) {
     const errorKey = `entity.${index}.${actionKey}.${key}`
     const raw = safeText(event.target.value).trim()
@@ -2846,6 +3329,9 @@ class AlphaAreaCardEditor extends LitElement {
     }
   }
 
+  /**
+   * Rend le panneau d action d une entite.
+   */
   _renderEntityActionEditor(index, actionKey, label) {
     const actionConfig = this._readEntityAction(index, actionKey)
     const actionType = actionConfig.action || "none"
@@ -2919,6 +3405,9 @@ class AlphaAreaCardEditor extends LitElement {
     `
   }
 
+  /**
+   * Determine si le badge est active pour une entite.
+   */
   _isEntityBadgeEnabled(entityConfig = {}) {
     if (entityConfig.badge === false || entityConfig.badge?.enabled === false) {
       return false
@@ -2939,6 +3428,9 @@ class AlphaAreaCardEditor extends LitElement {
     )
   }
 
+  /**
+   * Active ou desactive les options badge d une entite.
+   */
   _setEntityBadgeEnabled(index, enabled) {
     this._updateEntityItem(index, (entityConfig) => {
       if (enabled) {
@@ -2960,6 +3452,9 @@ class AlphaAreaCardEditor extends LitElement {
     })
   }
 
+  /**
+   * Rend le select du contenu de badge.
+   */
   _renderBadgeModeSelect(value, onChange) {
     const labels = {
       auto: "Automatique",
@@ -2977,6 +3472,9 @@ class AlphaAreaCardEditor extends LitElement {
     `
   }
 
+  /**
+   * Rend le select de visibilite de badge.
+   */
   _renderBadgeVisibilitySelect(value, onChange) {
     const labels = {
       auto: "Automatique",
@@ -2996,6 +3494,9 @@ class AlphaAreaCardEditor extends LitElement {
     `
   }
 
+  /**
+   * Rend le select de position de badge.
+   */
   _renderBadgePositionSelect(value, onChange) {
     const labels = {
       "top-right": "Haut droite",
@@ -3013,6 +3514,9 @@ class AlphaAreaCardEditor extends LitElement {
     `
   }
 
+  /**
+   * Rend le select de position d entite.
+   */
   _renderPositionSelect(value, onChange, includeAuto = true) {
     const labels = {
       "bottom-left": "Bas gauche",
@@ -3034,6 +3538,9 @@ class AlphaAreaCardEditor extends LitElement {
     `
   }
 
+  /**
+   * Rend le select de mode d affichage d entite.
+   */
   _renderDisplayModeSelect(value, onChange, includeDefault = true) {
     const labels = {
       button: "Bouton",
@@ -3051,6 +3558,9 @@ class AlphaAreaCardEditor extends LitElement {
     `
   }
 
+  /**
+   * Rend un picker d icone pour une option d entite.
+   */
   _renderEntityIconPicker(label, index, key, placeholder = "mdi:home", overrideValue = undefined) {
     const entities = this.config.entities || []
     const parsed = parseEntityConfig(entities[index]) || {}
@@ -3077,6 +3587,9 @@ class AlphaAreaCardEditor extends LitElement {
     `
   }
 
+  /**
+   * Rend un picker couleur pour une option d entite.
+   */
   _renderEntityColorField(label, index, key, fallback) {
     const entities = this.config.entities || []
     const parsed = parseEntityConfig(entities[index]) || {}
@@ -3117,6 +3630,9 @@ class AlphaAreaCardEditor extends LitElement {
     `
   }
 
+  /**
+   * Rend la liste compacte des entites configurees.
+   */
   _renderEntitiesField() {
     const entities = this.config.entities || []
 
@@ -3200,6 +3716,9 @@ class AlphaAreaCardEditor extends LitElement {
     `
   }
 
+  /**
+   * Rend le sous-onglet de parametrage detaille d une entite.
+   */
   _renderEntityDetailsTab() {
     const entities = this.config.entities || []
     const index = Math.max(0, Math.min(this._activeEntityIndex || 0, entities.length - 1))
@@ -3374,6 +3893,9 @@ class AlphaAreaCardEditor extends LitElement {
     `
   }
 
+  /**
+   * Rend les sous-onglets liste/details des entites.
+   */
   _renderEntitiesPanel() {
     const activeTab = ["list", "entity"].includes(this._activeEntityTab)
       ? this._activeEntityTab
@@ -3401,6 +3923,9 @@ class AlphaAreaCardEditor extends LitElement {
     `
   }
 
+  /**
+   * Rend le formulaire complet de configuration.
+   */
   render() {
     if (!this.config) return html``
 
@@ -3580,6 +4105,9 @@ class AlphaAreaCardEditor extends LitElement {
     `
   }
 
+  /**
+   * Definit le style interne de l editeur.
+   */
   static get styles() {
     return css`
       :host {
@@ -3901,13 +4429,22 @@ class AlphaAreaCardEditor extends LitElement {
   }
 }
 
+/**
+ * Enregistre le custom element principal une seule fois.
+ */
 if (!customElements.get(CARD_TYPE)) {
   customElements.define(CARD_TYPE, AlphaAreaCard)
 }
+/**
+ * Enregistre l editeur une seule fois.
+ */
 if (!customElements.get(CARD_EDITOR_TYPE)) {
   customElements.define(CARD_EDITOR_TYPE, AlphaAreaCardEditor)
 }
 
+/**
+ * Ajoute la carte au catalogue Lovelace.
+ */
 window.customCards = window.customCards || []
 if (!window.customCards.find((card) => card.type === CARD_TYPE)) {
   window.customCards.push({
