@@ -690,11 +690,9 @@ class AlphaAreaCard extends HTMLElement {
 
   static getGridOptions() {
     return {
-      columns: 12,
+      columns: "full",
       min_columns: 12,
       max_columns: 12,
-      rows: 3,
-      min_rows: 1,
     }
   }
 
@@ -833,25 +831,22 @@ class AlphaAreaCard extends HTMLElement {
   }
 
   getCardSize() {
-    return this._getGridRows(50, 16)
+    return this._getCardRows()
   }
 
   getGridOptions() {
-    const rows = this._getGridRows(56, 12)
     return {
-      columns: 12,
+      columns: "full",
       min_columns: 12,
       max_columns: 12,
-      rows,
-      min_rows: 1,
     }
   }
 
-  _getGridRows(rowHeight = 56, reserve = 0) {
+  _getCardRows() {
     const configuredHeight = normalizeCssSize(this.config?.height)
     const pixelHeight = getPixelHeightFromCssSize(configuredHeight)
     if (pixelHeight) {
-      return Math.max(1, Math.ceil((pixelHeight + reserve) / rowHeight))
+      return Math.max(1, Math.ceil(pixelHeight / 50))
     }
 
     if (this.config?.display_type === "compact") {
@@ -860,7 +855,7 @@ class AlphaAreaCard extends HTMLElement {
     if (this.config?.display_type === "icon") {
       return 3
     }
-    return 5
+    return 4
   }
 
   _shouldRefresh(previousHass, nextHass) {
@@ -1390,6 +1385,7 @@ class AlphaAreaCard extends HTMLElement {
 
   _onEntityPointerDown(event) {
     this._stopEntityEvent(event)
+    event.currentTarget?.focus?.({ preventScroll: true })
     event.currentTarget?.classList?.add("is-pressing")
     this.shadowRoot?.querySelector("ha-card")?.classList?.remove("is-pressing")
   }
@@ -2040,11 +2036,6 @@ class AlphaAreaCard extends HTMLElement {
 
         ha-card.is-compact:not(.has-fixed-height) {
           min-height: 104px;
-        }
-
-        ha-card:focus-within {
-          outline: 2px solid color-mix(in srgb, var(--mac-accent-color) 72%, transparent);
-          outline-offset: 2px;
         }
 
         ha-card.is-pressing {

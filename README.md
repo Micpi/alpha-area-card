@@ -23,6 +23,7 @@ Combinez image, capteurs et commandes dans un composant lisible, mobile-first et
 - affichage optimise des capteurs, alertes, toggles et entites secondaires
 - options modernes de l'Area card: `display_type`, `camera_view`, `aspect_ratio`, `color`, `sensor_classes`, `alert_classes`, `features_position`
 - largeur full width par defaut, hauteur precise configurable avec `height` et coins/image arrondis via `styles.border_radius`
+- hauteur automatique en vue Sections: la carte ne force pas de lignes de grille afin d'eviter les gaps sous la carte
 - icones d'entites resolues depuis la config, Home Assistant, le registre, puis le domaine/device_class
 - positionnement precis des entites: bas/haut gauche, centre, droite ou droite du titre
 - affichage par entite en bouton, texte ou icone seule, avec couleurs active/inactive
